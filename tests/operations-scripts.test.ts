@@ -40,6 +40,25 @@ describe("operations scripts fail safely", () => {
       expect(`${result.stdout}${result.stderr}`).not.toContain(value);
   });
 
+  it("normalizes an accidental path in the preview app URL", () => {
+    const result = spawnSync(process.execPath, ["scripts/setup-preview.mjs"], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        CLOUDFLARE_API_TOKEN: "synthetic-cloudflare-key-not-real",
+        CLOUDFLARE_ACCOUNT_URL:
+          "https://dash.cloudflare.com/11111111111111111111111111111111",
+        SUPABASE_DATABASE_URL:
+          "postgresql://postgres:synthetic@db.abcdefghijklmnopqrst.supabase.co:5432/postgres?sslmode=require",
+        SPI_APP_URL: "https://spi-preview.example.invalid/an-extra-path",
+        SPI_ADMIN_EMAIL_URL: "mailto:admin@example.invalid",
+      },
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Input KEY/URL preview valid");
+    expect(result.stdout).not.toContain("an-extra-path");
+  });
+
   it("validates bootstrap inputs without network or sensitive output", () => {
     const result = spawnSync(
       process.execPath,

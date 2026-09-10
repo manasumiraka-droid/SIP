@@ -29,8 +29,8 @@ const accountId = accountUrl.pathname.split("/").filter(Boolean)[0];
 if (!accountId || !/^[a-f0-9]{32}$/i.test(accountId))
   throw new Error("URL account Cloudflare tidak memuat account ID yang valid.");
 const app = new URL(input.appUrl);
-if (app.pathname !== "/" || app.search || app.hash)
-  throw new Error("SPI_APP_URL harus berupa origin HTTPS tanpa path/query.");
+if (app.search || app.hash)
+  throw new Error("SPI_APP_URL tidak boleh memuat query atau fragment.");
 const databaseUrl = new URL(input.databaseUrl);
 if (
   !(
