@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { URL } from "node:url";
 import process from "node:process";
@@ -14,10 +14,6 @@ const input = z
     cloudflareAccountUrl: z.url().regex(/^https:\/\/dash\.cloudflare\.com\//),
     databaseUrl: z.url().regex(/^postgres(?:ql)?:\/\//),
     appUrl: z.url().regex(/^https:\/\//),
-    accessIssuer: z
-      .url()
-      .regex(/^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com\/?$/),
-    accessAudience: z.string().min(10),
     adminEmailUrl: z.url().regex(/^mailto:/),
   })
   .parse({
@@ -25,8 +21,6 @@ const input = z
     cloudflareAccountUrl: process.env.CLOUDFLARE_ACCOUNT_URL,
     databaseUrl: process.env.SUPABASE_DATABASE_URL,
     appUrl: process.env.SPI_APP_URL,
-    accessIssuer: process.env.SPI_ACCESS_ISSUER,
-    accessAudience: process.env.SPI_ACCESS_AUDIENCE,
     adminEmailUrl: process.env.SPI_ADMIN_EMAIL_URL,
   });
 
@@ -327,11 +321,12 @@ const repository = runGh([
   ".nameWithOwner",
 ]);
 runGh(["api", `repos/${repository}/environments/preview`, "-X", "PUT"]);
+const previewAuthKey = randomBytes(32).toString("base64url");
 const secrets = {
   CLOUDFLARE_API_TOKEN: input.cloudflareToken,
   CLOUDFLARE_ACCOUNT_ID: accountId,
   SUPABASE_DATABASE_URL: input.databaseUrl,
-  SPI_ACCESS_AUDIENCE: input.accessAudience,
+  SPI_PREVIEW_AUTH_KEY: previewAuthKey,
   SPI_HYPERDRIVE_ID: hyperdrive.id,
   SPI_PRODUCTION_HYPERDRIVE_ID: "production-not-configured",
   SPI_AUTH_RATE_LIMIT_NAMESPACE_ID: defaults.authNamespace,
@@ -344,7 +339,8 @@ for (const [name, value] of Object.entries(secrets))
   runGh(["secret", "set", name, "--env", "preview"], value);
 const variables = {
   SPI_APP_ORIGIN: app.origin,
-  SPI_ACCESS_ISSUER: input.accessIssuer.replace(/\/$/, ""),
+  SPI_AUTH_MODE: "preview_key",
+  SPI_PREVIEW_AUTH_EMAIL: adminEmail,
   SPI_ORGANIZATION_ID: defaults.organizationId,
   SPI_WORKER_ROUTE: `${app.hostname}/api/*`,
   SPI_TELEGRAM_WEBHOOK_ROUTE: `${app.hostname}/telegram/webhook`,
@@ -356,6 +352,11 @@ const variables = {
 for (const [name, value] of Object.entries(variables))
   runGh(["variable", "set", name, "--env", "preview", "--body", value]);
 
+await writeFile(resolve(".preview-login-key"), `${previewAuthKey}\n`, {
+  encoding: "utf8",
+  mode: 0o600,
+});
+
 runGh([
   "workflow",
   "run",
@@ -366,5 +367,5 @@ runGh([
   "configure_telegram=false",
 ]);
 process.stdout.write(
-  "Environment preview selesai disiapkan dan workflow deploy sudah dikirim.\n",
+  "Environment preview selesai disiapkan dan workflow deploy sudah dikirim. Kunci login tersimpan di .preview-login-key.\n",
 );

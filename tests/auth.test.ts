@@ -23,6 +23,28 @@ it("allows the fixed development assertion only for the explicit localhost envir
     }),
   ).rejects.toThrow();
 });
+it("allows a strong preview key only in the preview key mode", async () => {
+  const config = {
+    AUTH_MODE: "preview_key" as const,
+    ENVIRONMENT: "preview",
+    APP_ORIGIN: "https://preview.example.invalid",
+    PREVIEW_AUTH_KEY: "synthetic-preview-key-that-is-long-enough",
+    PREVIEW_AUTH_EMAIL: "ADMIN@example.invalid",
+  };
+  expect(
+    await verifyConfiguredAccess(
+      "synthetic-preview-key-that-is-long-enough",
+      config,
+    ),
+  ).toBe("admin@example.invalid");
+  await expect(verifyConfiguredAccess("wrong-key", config)).rejects.toThrow();
+  await expect(
+    verifyConfiguredAccess("synthetic-preview-key-that-is-long-enough", {
+      ...config,
+      ENVIRONMENT: "production",
+    }),
+  ).rejects.toThrow();
+});
 it("cryptographically validates signature, expiry, issuer and audience", async () => {
   const pair = await generateKeyPair("RS256");
   const other = await generateKeyPair("RS256");

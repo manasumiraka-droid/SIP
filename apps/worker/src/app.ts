@@ -91,7 +91,11 @@ export function createApp(dependencies: Dependencies = defaults) {
         },
         403,
       );
-    const token = c.req.header("Cf-Access-Jwt-Assertion");
+    const authorization = c.req.header("Authorization");
+    const token =
+      c.env.AUTH_MODE === "preview_key"
+        ? authorization?.match(/^Bearer (.+)$/i)?.[1]
+        : c.req.header("Cf-Access-Jwt-Assertion");
     let email: string;
     try {
       if (!token || token.length > 16384) throw new Error("Missing assertion");
@@ -101,7 +105,7 @@ export function createApp(dependencies: Dependencies = defaults) {
         {
           error: {
             code: "UNAUTHENTICATED",
-            message: "Silakan masuk melalui akses pengurus.",
+            message: "Silakan masuk menggunakan kredensial pengurus.",
             request_id: c.get("requestId"),
             details: [],
           },
@@ -124,7 +128,7 @@ export function createApp(dependencies: Dependencies = defaults) {
         {
           error: {
             code: "UNAUTHENTICATED",
-            message: "Silakan masuk melalui akses pengurus.",
+            message: "Silakan masuk menggunakan kredensial pengurus.",
             request_id: c.get("requestId"),
             details: [],
           },

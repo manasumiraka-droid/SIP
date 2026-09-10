@@ -10,6 +10,12 @@ import {
 import { meResponseSchema } from "../../../packages/validation/src/identity";
 import "./styles.css";
 import { ProductShell } from "./ProductShell";
+import {
+  getPreviewAuthKey,
+  installAuthenticatedFetch,
+  setPreviewAuthKey,
+} from "./api";
+installAuthenticatedFetch();
 type View =
   | { state: "loading" }
   | { state: "denied" | "error" }
@@ -38,6 +44,7 @@ function App() {
       : { state: "loading" },
   );
   const [attempt, setAttempt] = useState(0);
+  const [accessKey, setAccessKey] = useState("");
   useEffect(() => {
     if (preview) return;
     const controller = new AbortController();
@@ -138,11 +145,32 @@ function App() {
                   </h2>
                   <p>
                     {view.state === "denied"
-                      ? "Buka aplikasi melalui akses resmi jemaat. Jika Anda belum memperoleh akses, hubungi administrator."
+                      ? "Masukkan kunci preview yang dibuat saat penyiapan environment."
                       : "Periksa koneksi Anda, lalu coba kembali."}
                   </p>
-                  <button onClick={() => setAttempt((value) => value + 1)}>
-                    <RefreshCw size={18} aria-hidden="true" /> Periksa kembali
+                  {view.state === "denied" && (
+                    <input
+                      type="password"
+                      aria-label="Kunci akses preview"
+                      autoComplete="current-password"
+                      value={accessKey}
+                      onChange={(event) => setAccessKey(event.target.value)}
+                      placeholder="Kunci akses preview"
+                    />
+                  )}
+                  <button
+                    onClick={() => {
+                      if (view.state === "denied") setPreviewAuthKey(accessKey);
+                      setAttempt((value) => value + 1);
+                    }}
+                    disabled={
+                      view.state === "denied" &&
+                      !accessKey.trim() &&
+                      !getPreviewAuthKey()
+                    }
+                  >
+                    <RefreshCw size={18} aria-hidden="true" />
+                    {view.state === "denied" ? "Masuk" : "Periksa kembali"}
                   </button>
                 </>
               )}

@@ -18,7 +18,7 @@ Jalankan web dan Worker lokal bersama-sama:
 npm run dev
 ```
 
-Buka http://localhost:5173. Perintah `dev` menjaga Vite dan Worker demo dalam satu proses induk agar UI tidak tersambung ke web tanpa API. Proxy Vite mengirim assertion demo tetap ke Worker dan aplikasi membaca data sintetis dari D1 lokal. Bypass hanya diterima saat `ENVIRONMENT=local`, origin tepat `http://localhost:5173`, dan email demo dikonfigurasi; preview/production tetap wajib memakai JWT Cloudflare Access. `npm run dev:web` dan `npm run dev:api` tersedia untuk diagnosis terpisah.
+Buka http://localhost:5173. Perintah `dev` menjaga Vite dan Worker demo dalam satu proses induk agar UI tidak tersambung ke web tanpa API. Proxy Vite mengirim assertion demo tetap ke Worker dan aplikasi membaca data sintetis dari D1 lokal. Bypass hanya diterima saat `ENVIRONMENT=local`, origin tepat `http://localhost:5173`, dan email demo dikonfigurasi. Preview sementara memakai kunci acak khusus preview tanpa Cloudflare Zero Trust; production tetap wajib memakai JWT Cloudflare Access. `npm run dev:web` dan `npm run dev:api` tersedia untuk diagnosis terpisah.
 
 Salin variabel runtime awal `.env.example` ke `apps/worker/.dev.vars` untuk pengujian Access terkonfigurasi. Bootstrap cloud memakai skrip operator satu kali dan tidak menyediakan akun bawaan atau UI bootstrap. Jangan memakai akun/data produksi di lokal.
 

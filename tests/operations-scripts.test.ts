@@ -27,8 +27,6 @@ describe("operations scripts fail safely", () => {
       SUPABASE_DATABASE_URL:
         "postgresql://postgres:synthetic@db.abcdefghijklmnopqrst.supabase.co:5432/postgres?sslmode=require",
       SPI_APP_URL: "https://spi-preview.example.invalid",
-      SPI_ACCESS_ISSUER: "https://synthetic.cloudflareaccess.com",
-      SPI_ACCESS_AUDIENCE: "synthetic-access-audience-key",
       SPI_ADMIN_EMAIL_URL: "mailto:admin@example.invalid",
     };
     const result = spawnSync(process.execPath, ["scripts/setup-preview.mjs"], {
@@ -94,8 +92,8 @@ describe("operations scripts fail safely", () => {
           ...common,
           SPI_OTHER_HYPERDRIVE_ID: "hyperdrive-production",
           SPI_APP_ORIGIN: "https://preview.example.invalid",
-          SPI_ACCESS_ISSUER: "https://synthetic.cloudflareaccess.com",
-          SPI_ACCESS_AUDIENCE: "synthetic-audience",
+          SPI_AUTH_MODE: "preview_key",
+          SPI_PREVIEW_AUTH_EMAIL: "admin@example.invalid",
           SPI_ORGANIZATION_ID: "org-preview",
           SPI_WORKER_ROUTE: "preview.example.invalid/api/*",
           SPI_TELEGRAM_WEBHOOK_ROUTE:
@@ -135,8 +133,8 @@ describe("operations scripts fail safely", () => {
           ...common,
           SPI_OTHER_HYPERDRIVE_ID: common.SPI_HYPERDRIVE_ID,
           SPI_APP_ORIGIN: "https://preview.example.invalid",
-          SPI_ACCESS_ISSUER: "https://synthetic.cloudflareaccess.com",
-          SPI_ACCESS_AUDIENCE: "synthetic-audience",
+          SPI_AUTH_MODE: "preview_key",
+          SPI_PREVIEW_AUTH_EMAIL: "admin@example.invalid",
           SPI_ORGANIZATION_ID: "org-preview",
           SPI_WORKER_ROUTE: "preview.example.invalid/api/*",
           SPI_TELEGRAM_WEBHOOK_ROUTE:
@@ -161,8 +159,8 @@ describe("operations scripts fail safely", () => {
             common.SPI_AUTH_RATE_LIMIT_NAMESPACE_ID,
           SPI_OTHER_HYPERDRIVE_ID: "hyperdrive-production",
           SPI_APP_ORIGIN: "https://preview.example.invalid",
-          SPI_ACCESS_ISSUER: "https://synthetic.cloudflareaccess.com",
-          SPI_ACCESS_AUDIENCE: "synthetic-audience",
+          SPI_AUTH_MODE: "preview_key",
+          SPI_PREVIEW_AUTH_EMAIL: "admin@example.invalid",
           SPI_ORGANIZATION_ID: "org-preview",
           SPI_WORKER_ROUTE: "preview.example.invalid/api/*",
           SPI_TELEGRAM_WEBHOOK_ROUTE:
@@ -184,8 +182,8 @@ describe("operations scripts fail safely", () => {
           ...common,
           SPI_OTHER_HYPERDRIVE_ID: "hyperdrive-production",
           SPI_APP_ORIGIN: "https://preview.example.invalid",
-          SPI_ACCESS_ISSUER: "https://synthetic.cloudflareaccess.com",
-          SPI_ACCESS_AUDIENCE: "synthetic-audience",
+          SPI_AUTH_MODE: "preview_key",
+          SPI_PREVIEW_AUTH_EMAIL: "admin@example.invalid",
           SPI_ORGANIZATION_ID: "org-preview",
           SPI_WORKER_ROUTE: "preview.example.invalid/api/*",
           SPI_TELEGRAM_WEBHOOK_ROUTE:

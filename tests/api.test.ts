@@ -13,6 +13,7 @@ const actor: Actor = {
 function fixture(
   identity: Actor | null = actor,
   authLimit: { success: boolean } = { success: true },
+  envOverrides: Record<string, unknown> = {},
 ) {
   const dependencies = {
     verify: vi.fn(async () => "synthetic@example.invalid"),
@@ -28,6 +29,7 @@ function fixture(
     ACCESS_AUDIENCE: "synthetic-audience",
     ENVIRONMENT: "local" as const,
     AUTH_LIMITER: { limit: async () => authLimit },
+    ...envOverrides,
   };
   const request = (
     path = "/api/v1/me",
@@ -56,6 +58,26 @@ describe("identity API", () => {
     expect(response.status).toBe(401);
     expect(await response.text()).not.toContain("private");
     expect(dependencies.findActor).not.toHaveBeenCalled();
+  });
+  it("reads bearer credentials in preview key mode", async () => {
+    const { request, dependencies } = fixture(
+      actor,
+      { success: true },
+      {
+        AUTH_MODE: "preview_key",
+        ENVIRONMENT: "preview",
+        PREVIEW_AUTH_KEY: "synthetic-preview-key-that-is-long-enough",
+        PREVIEW_AUTH_EMAIL: "admin@example.invalid",
+      },
+    );
+    const response = await request("/api/v1/me", {
+      Authorization: "Bearer strong-preview-key",
+    });
+    expect(response.status).toBe(200);
+    expect(dependencies.verify).toHaveBeenCalledWith(
+      "strong-preview-key",
+      expect.objectContaining({ AUTH_MODE: "preview_key" }),
+    );
   });
   it("rate limits authentication before JWT verification", async () => {
     const { request, dependencies } = fixture(actor, { success: false });

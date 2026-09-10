@@ -4,6 +4,7 @@ dist/
 .dev.vars*
 .env*
 !.env.example
+.preview-login-key
 coverage/
 *.log
 test-results/

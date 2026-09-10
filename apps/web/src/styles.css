@@ -1016,6 +1016,16 @@ h2 {
   line-height: 1.7;
   font-size: 14px;
 }
+.panel > input {
+  width: 100%;
+  margin-top: 20px;
+  border: 1px solid #b8c5bf;
+  border-radius: 9px;
+  padding: 13px 14px;
+  min-height: 48px;
+  color: #173f36;
+  background: #fff;
+}
 button {
   display: flex;
   gap: 10px;
@@ -1029,6 +1039,10 @@ button {
   margin-top: 24px;
   font-weight: 600;
   cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 button:hover {
   background: #103c33;

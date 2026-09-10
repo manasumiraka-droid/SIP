@@ -37,8 +37,8 @@ jobs:
           SPI_HYPERDRIVE_ID: ${{ secrets.SPI_HYPERDRIVE_ID }}
           SPI_OTHER_HYPERDRIVE_ID: ${{ secrets.SPI_PRODUCTION_HYPERDRIVE_ID }}
           SPI_APP_ORIGIN: ${{ vars.SPI_APP_ORIGIN }}
-          SPI_ACCESS_ISSUER: ${{ vars.SPI_ACCESS_ISSUER }}
-          SPI_ACCESS_AUDIENCE: ${{ secrets.SPI_ACCESS_AUDIENCE }}
+          SPI_AUTH_MODE: ${{ vars.SPI_AUTH_MODE }}
+          SPI_PREVIEW_AUTH_EMAIL: ${{ vars.SPI_PREVIEW_AUTH_EMAIL }}
           SPI_ORGANIZATION_ID: ${{ vars.SPI_ORGANIZATION_ID }}
           SPI_WORKER_ROUTE: ${{ vars.SPI_WORKER_ROUTE }}
           SPI_TELEGRAM_WEBHOOK_ROUTE: ${{ vars.SPI_TELEGRAM_WEBHOOK_ROUTE }}
@@ -57,6 +57,12 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Configure preview authentication secret
+        run: node scripts/configure-preview-auth.mjs --apply
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SPI_PREVIEW_AUTH_KEY: ${{ secrets.SPI_PREVIEW_AUTH_KEY }}
       - name: Configure Telegram Worker secrets
         if: inputs.configure_telegram == true
         run: node scripts/configure-telegram-cloud.mjs preview --apply

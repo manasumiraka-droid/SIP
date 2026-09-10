@@ -16,7 +16,7 @@ npm run setup:preview -- --apply
 
 Perintah pertama hanya memvalidasi tanpa koneksi jaringan. Perintah kedua akan menerapkan migrasi Supabase, membuat user database khusus dan Hyperdrive, membuat/menautkan Pages custom domain, mengisi GitHub Environment `preview`, bootstrap Super Admin, lalu menjalankan workflow deploy ke project preview khusus. Skrip tidak mencetak KEY, password, connection string, atau email admin.
 
-`SPI_ADMIN_EMAIL_URL` memakai bentuk `mailto:nama@domain.tld`; alamatnya harus sama dengan email yang diterima dari Cloudflare Access.
+`SPI_ADMIN_EMAIL_URL` memakai bentuk `mailto:nama@domain.tld`. Pada preview tanpa Zero Trust, alamat ini menjadi identitas yang dipetakan setelah kunci preview tervalidasi. Kunci acak dibuat otomatis saat `setup:preview -- --apply`, disimpan sebagai secret, dan salinan lokalnya berada di `.preview-login-key` yang diabaikan Git.
 
 ### Jalur manual
 
@@ -35,6 +35,6 @@ npm run bootstrap:preview
 npm run bootstrap:preview -- --apply
 ```
 
-Skema mencabut hak `anon` dan `authenticated` pada tabel SPI. Aplikasi tetap memakai Cloudflare Access dan RBAC internal; Supabase Auth/Data API tidak menjadi jalur akses aplikasi pada fase ini.
+Skema mencabut hak `anon` dan `authenticated` pada tabel SPI. Aplikasi tetap memakai RBAC internal; preview sementara memakai kunci aplikasi tanpa Cloudflare Zero Trust, sedangkan production tetap mensyaratkan Access. Supabase Auth/Data API tidak menjadi jalur akses aplikasi pada fase ini.
 
 Referensi resmi: [Cloudflare Hyperdrive dengan Supabase](https://developers.cloudflare.com/hyperdrive/examples/connect-to-postgres/postgres-database-providers/supabase/), [driver PostgreSQL untuk Hyperdrive](https://developers.cloudflare.com/hyperdrive/examples/connect-to-postgres/), dan [opsi koneksi Supabase](https://supabase.com/docs/guides/database/connecting-to-postgres).
