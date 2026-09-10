@@ -152,8 +152,8 @@ async function configureHyperdriveRole(client, password) {
   const role = defaults.hyperdriveRole;
   const statement = await client.query(
     `select case when exists(select 1 from pg_roles where rolname=$1)
-      then format('alter role %I login password %L',$1,$2)
-      else format('create role %I login password %L',$1,$2) end as sql`,
+      then format('alter role %I login password %L',$1,$2::text)
+      else format('create role %I login password %L',$1,$2::text) end as sql`,
     [role, password],
   );
   await client.query(statement.rows[0].sql);

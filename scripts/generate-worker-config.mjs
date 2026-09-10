@@ -3,6 +3,11 @@ import process from "node:process";
 import { resolve } from "node:path";
 import { z } from "zod";
 const environment = z.enum(["preview", "production"]).parse(process.argv[2]);
+const optional = (schema) =>
+  z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    schema.optional(),
+  );
 const values = z
   .object({
     hyperdriveId: z.string().min(1).max(100),
@@ -10,25 +15,17 @@ const values = z
     appOrigin: z.url().regex(/^https:\/\//),
     deployTarget: z.enum(["zone", "workers_dev"]),
     authMode: z.enum(["cloudflare_access", "preview_key"]),
-    previewAuthEmail: z.email().optional(),
-    issuer: z
-      .url()
-      .regex(/^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com$/)
-      .optional(),
-    audience: z.string().min(1).optional(),
+    previewAuthEmail: optional(z.email()),
+    issuer: optional(
+      z.url().regex(/^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com$/),
+    ),
+    audience: optional(z.string().min(1)),
     organizationId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
-    workerRoute: z
-      .string()
-      .regex(/^[a-z0-9.-]+\/api\/\*$/)
-      .optional(),
-    telegramWebhookRoute: z
-      .string()
-      .regex(/^[a-z0-9.-]+\/telegram\/webhook$/)
-      .optional(),
-    zoneName: z
-      .string()
-      .regex(/^[a-z0-9.-]+$/)
-      .optional(),
+    workerRoute: optional(z.string().regex(/^[a-z0-9.-]+\/api\/\*$/)),
+    telegramWebhookRoute: optional(
+      z.string().regex(/^[a-z0-9.-]+\/telegram\/webhook$/),
+    ),
+    zoneName: optional(z.string().regex(/^[a-z0-9.-]+$/)),
     authNamespace: z.string().regex(/^\d+$/),
     mutationNamespace: z.string().regex(/^\d+$/),
     otherAuthNamespace: z.string().regex(/^\d+$/),
