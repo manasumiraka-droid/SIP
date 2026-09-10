@@ -5,33 +5,62 @@ import {
   handleWebhook,
   runTelegramNotifications,
 } from "./telegram";
+import type { TelegramEnv } from "./telegram";
+import { asD1Database, createPostgresDatabase } from "./database";
+
+type WorkerEnv = Omit<TelegramEnv, "DB"> & {
+  DB?: D1Database;
+  HYPERDRIVE?: Hyperdrive;
+  ACCESS_ISSUER: string;
+  ACCESS_AUDIENCE: string;
+  APP_ORIGIN: string;
+  ENVIRONMENT: "local" | "preview" | "production";
+  LOCAL_DEVELOPMENT_EMAIL?: string;
+  MUTATION_LIMITER: RateLimit;
+  AUTH_LIMITER: RateLimit;
+};
+
+function runtimeDatabase(env: WorkerEnv) {
+  if (env.HYPERDRIVE) {
+    const postgres = createPostgresDatabase(env.HYPERDRIVE.connectionString);
+    return { database: asD1Database(postgres), close: () => postgres.close() };
+  }
+  if (env.DB) return { database: env.DB, close: async () => undefined };
+  throw new Error("Database binding not configured");
+}
+
 const app = createApp();
 export default {
-  fetch(
-    request: Request,
-    env: Parameters<typeof handleWebhook>[1],
-    context: ExecutionContext,
-  ) {
-    if (new URL(request.url).pathname === "/telegram/webhook")
-      return handleWebhook(request, env, createTelegramSender(env));
-    return app.fetch(request, env, context);
+  async fetch(request: Request, env: WorkerEnv, context: ExecutionContext) {
+    const runtime = runtimeDatabase(env);
+    const resolved = { ...env, DB: runtime.database };
+    try {
+      if (new URL(request.url).pathname === "/telegram/webhook")
+        return await handleWebhook(
+          request,
+          resolved,
+          createTelegramSender(resolved),
+        );
+      return await app.fetch(request, resolved, context);
+    } finally {
+      context.waitUntil(runtime.close());
+    }
   },
   scheduled(
     _controller: ScheduledController,
-    env: {
-      DB: D1Database;
-      ORGANIZATION_ID: string;
-      TELEGRAM_WEBHOOK_SECRET?: string;
-      TELEGRAM_BOT_TOKEN?: string;
-      TELEGRAM_DELIVERY_ENABLED?: string;
-    },
+    env: WorkerEnv,
     context: ExecutionContext,
   ) {
+    const runtime = runtimeDatabase(env);
+    const resolved = { ...env, DB: runtime.database };
     context.waitUntil(
-      Promise.all([
-        runImportRetention(env.DB),
-        runTelegramNotifications(env, createTelegramSender(env)),
-      ]),
+      (async () => {
+        await runImportRetention(resolved.DB);
+        await runTelegramNotifications(
+          resolved,
+          createTelegramSender(resolved),
+        );
+      })().finally(runtime.close),
     );
   },
 };

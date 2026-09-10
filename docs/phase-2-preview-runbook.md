@@ -14,13 +14,14 @@ Runbook ini menyiapkan uji akun Telegram nyata di **preview** tanpa mengaktifkan
 Secrets yang diperlukan:
 
 - `CLOUDFLARE_API_TOKEN` dan `CLOUDFLARE_ACCOUNT_ID` untuk resource preview saja.
-- `SPI_D1_DATABASE_ID` dan ID database production pembanding `SPI_PRODUCTION_D1_DATABASE_ID`; keduanya wajib berbeda.
+- `SUPABASE_DATABASE_URL` untuk migrasi preview; simpan hanya sebagai secret dan gunakan koneksi langsung/session, bukan transaction pooler.
+- `SPI_HYPERDRIVE_ID` dan ID Hyperdrive production pembanding `SPI_PRODUCTION_HYPERDRIVE_ID`; keduanya wajib berbeda.
 - `SPI_ACCESS_AUDIENCE`, namespace rate limit preview, serta namespace pembanding production.
 - `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_WEBHOOK_SECRET` acak sepanjang sedikitnya 32 karakter.
 
 Variables yang diperlukan:
 
-- `SPI_D1_DATABASE_NAME`, `SPI_APP_ORIGIN`, `SPI_ACCESS_ISSUER`, `SPI_ORGANIZATION_ID`, `SPI_ZONE_NAME`, dan `SPI_PAGES_PROJECT`.
+- `SPI_APP_ORIGIN`, `SPI_ACCESS_ISSUER`, `SPI_ORGANIZATION_ID`, `SPI_ZONE_NAME`, dan `SPI_PAGES_PROJECT`.
 - `SPI_WORKER_ROUTE` dengan bentuk `host-preview/api/*`.
 - `SPI_TELEGRAM_WEBHOOK_ROUTE` dengan host yang sama dan path tepat `host-preview/telegram/webhook`.
 - `SPI_TELEGRAM_WEBHOOK_URL` berupa URL HTTPS yang sama dengan origin preview dan path tepat `/telegram/webhook`.

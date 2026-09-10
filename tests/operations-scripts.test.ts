@@ -5,7 +5,9 @@ const common = {
   ...process.env,
   CLOUDFLARE_ACCOUNT_ID: "synthetic-account",
   CLOUDFLARE_API_TOKEN: "synthetic-token-that-is-long-enough",
-  SPI_D1_DATABASE_ID: "11111111-1111-4111-8111-111111111111",
+  SUPABASE_DATABASE_URL:
+    "postgresql://synthetic:synthetic@database.example.invalid/postgres",
+  SPI_HYPERDRIVE_ID: "hyperdrive-preview",
   SPI_ENVIRONMENT: "preview",
   SPI_AUTH_RATE_LIMIT_NAMESPACE_ID: "2001",
   SPI_MUTATION_RATE_LIMIT_NAMESPACE_ID: "2002",
@@ -20,7 +22,7 @@ describe("operations scripts fail safely", () => {
   it("validates bootstrap inputs without network or sensitive output", () => {
     const result = spawnSync(
       process.execPath,
-      ["scripts/bootstrap-cloud.mjs", "preview"],
+      ["scripts/bootstrap-supabase.mjs", "preview"],
       {
         encoding: "utf8",
         env: {
@@ -42,7 +44,7 @@ describe("operations scripts fail safely", () => {
   it("rejects an invalid bootstrap timezone before network access", () => {
     const result = spawnSync(
       process.execPath,
-      ["scripts/bootstrap-cloud.mjs", "preview"],
+      ["scripts/bootstrap-supabase.mjs", "preview"],
       {
         encoding: "utf8",
         env: {
@@ -67,8 +69,7 @@ describe("operations scripts fail safely", () => {
         encoding: "utf8",
         env: {
           ...common,
-          SPI_OTHER_D1_DATABASE_ID: "22222222-2222-4222-8222-222222222222",
-          SPI_D1_DATABASE_NAME: "spi-preview",
+          SPI_OTHER_HYPERDRIVE_ID: "hyperdrive-production",
           SPI_APP_ORIGIN: "https://preview.example.invalid",
           SPI_ACCESS_ISSUER: "https://synthetic.cloudflareaccess.com",
           SPI_ACCESS_AUDIENCE: "synthetic-audience",
@@ -98,10 +99,10 @@ describe("operations scripts fail safely", () => {
           zone_name: "example.invalid",
         },
       ],
-      d1_databases: [{ database_name: "spi-preview" }],
+      hyperdrive: [{ binding: "HYPERDRIVE", id: "hyperdrive-preview" }],
     });
   });
-  it("rejects a shared preview and production database", () => {
+  it("rejects a shared preview and production Hyperdrive", () => {
     const result = spawnSync(
       process.execPath,
       ["scripts/generate-worker-config.mjs", "preview"],
@@ -109,8 +110,7 @@ describe("operations scripts fail safely", () => {
         encoding: "utf8",
         env: {
           ...common,
-          SPI_OTHER_D1_DATABASE_ID: common.SPI_D1_DATABASE_ID,
-          SPI_D1_DATABASE_NAME: "spi-preview",
+          SPI_OTHER_HYPERDRIVE_ID: common.SPI_HYPERDRIVE_ID,
           SPI_APP_ORIGIN: "https://preview.example.invalid",
           SPI_ACCESS_ISSUER: "https://synthetic.cloudflareaccess.com",
           SPI_ACCESS_AUDIENCE: "synthetic-audience",
@@ -136,8 +136,7 @@ describe("operations scripts fail safely", () => {
           ...common,
           SPI_MUTATION_RATE_LIMIT_NAMESPACE_ID:
             common.SPI_AUTH_RATE_LIMIT_NAMESPACE_ID,
-          SPI_OTHER_D1_DATABASE_ID: "22222222-2222-4222-8222-222222222222",
-          SPI_D1_DATABASE_NAME: "spi-preview",
+          SPI_OTHER_HYPERDRIVE_ID: "hyperdrive-production",
           SPI_APP_ORIGIN: "https://preview.example.invalid",
           SPI_ACCESS_ISSUER: "https://synthetic.cloudflareaccess.com",
           SPI_ACCESS_AUDIENCE: "synthetic-audience",
@@ -160,8 +159,7 @@ describe("operations scripts fail safely", () => {
         encoding: "utf8",
         env: {
           ...common,
-          SPI_OTHER_D1_DATABASE_ID: "22222222-2222-4222-8222-222222222222",
-          SPI_D1_DATABASE_NAME: "spi-preview",
+          SPI_OTHER_HYPERDRIVE_ID: "hyperdrive-production",
           SPI_APP_ORIGIN: "https://preview.example.invalid",
           SPI_ACCESS_ISSUER: "https://synthetic.cloudflareaccess.com",
           SPI_ACCESS_AUDIENCE: "synthetic-audience",

@@ -37,7 +37,7 @@ npm run test:browser
 ## Struktur
 
 - `apps/web`: React/Vite/Tailwind, Bahasa Indonesia, halaman status akses responsif.
-- `apps/worker`: Hono, adapter JWT Access, repository D1, audit.
+- `apps/worker`: Hono, adapter JWT Access, repository SQL, audit, dan adapter PostgreSQL Hyperdrive.
 - `packages/domain`: policy murni yang memisahkan permission dan scope.
 - `packages/validation`: kontrak Zod untuk identitas dan respons.
 - `migrations`: SQL berurutan, terpisah dari seed jemaat.
@@ -51,4 +51,4 @@ Schema dan API berbatas organisasi untuk bidang/peran, profil pelayan, capabilit
 
 Admin dapat mengunduh template kosong [form-jadwal-ibadah.xlsx](apps/web/public/form-jadwal-ibadah.xlsx), mengisinya, lalu mengunggahnya pada wizard impor. Template hanya berisi enam header yang diwajibkan PRD dan tidak memuat data jemaat.
 
-Template deployment preview dan generator konfigurasi terisolasi tersedia. Workflow **Deploy preview** dapat membawa Pages, Worker, dan migrasi D1 online lebih dahulu dengan `configure_telegram=false`; pemasangan secret dan webhook Telegram hanya berjalan bila dipilih eksplisit. Hosting akhir tetap Pages + Worker: rute `/api/*` diteruskan ke Worker pada origin yang sama dan seluruh UI pengurus dilindungi Access. Lihat [runbook preview Cloudflare](docs/phase-2-preview-runbook.md) dan [closeout Fase 2.5](docs/phase-2.5-repository-cloudflare.md). Jangan mengaktifkan production sebelum gerbang review di [dokumen fondasi](docs/foundation.md) diselesaikan.
+Template deployment preview dan generator konfigurasi terisolasi tersedia. Target online memakai Supabase PostgreSQL melalui Cloudflare Hyperdrive; D1 hanya dipertahankan sebagai emulator tes lokal. Workflow **Deploy preview** dapat membawa Pages, Worker, dan migrasi Supabase lebih dahulu dengan `configure_telegram=false`; pemasangan secret dan webhook Telegram hanya berjalan bila dipilih eksplisit. Lihat [setup Supabase–Cloudflare](docs/supabase-cloudflare.md), [runbook preview Cloudflare](docs/phase-2-preview-runbook.md), dan [closeout Fase 2.5](docs/phase-2.5-repository-cloudflare.md).

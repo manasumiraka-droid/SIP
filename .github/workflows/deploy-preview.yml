@@ -34,9 +34,8 @@ jobs:
         run: npm run config:preview
         env:
           SPI_ENVIRONMENT: preview
-          SPI_D1_DATABASE_ID: ${{ secrets.SPI_D1_DATABASE_ID }}
-          SPI_OTHER_D1_DATABASE_ID: ${{ secrets.SPI_PRODUCTION_D1_DATABASE_ID }}
-          SPI_D1_DATABASE_NAME: ${{ vars.SPI_D1_DATABASE_NAME }}
+          SPI_HYPERDRIVE_ID: ${{ secrets.SPI_HYPERDRIVE_ID }}
+          SPI_OTHER_HYPERDRIVE_ID: ${{ secrets.SPI_PRODUCTION_HYPERDRIVE_ID }}
           SPI_APP_ORIGIN: ${{ vars.SPI_APP_ORIGIN }}
           SPI_ACCESS_ISSUER: ${{ vars.SPI_ACCESS_ISSUER }}
           SPI_ACCESS_AUDIENCE: ${{ secrets.SPI_ACCESS_AUDIENCE }}
@@ -50,10 +49,9 @@ jobs:
           SPI_OTHER_AUTH_RATE_LIMIT_NAMESPACE_ID: ${{ secrets.SPI_PRODUCTION_AUTH_RATE_LIMIT_NAMESPACE_ID }}
           SPI_OTHER_MUTATION_RATE_LIMIT_NAMESPACE_ID: ${{ secrets.SPI_PRODUCTION_MUTATION_RATE_LIMIT_NAMESPACE_ID }}
       - name: Apply reviewed preview migrations
-        run: node scripts/wrangler.mjs d1 migrations apply DB --remote --config .wrangler/generated/preview.json
+        run: npm run db:migrate:supabase
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
       - name: Deploy preview Worker
         run: node scripts/wrangler.mjs deploy --config .wrangler/generated/preview.json
         env:

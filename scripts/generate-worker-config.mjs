@@ -5,9 +5,8 @@ import { z } from "zod";
 const environment = z.enum(["preview", "production"]).parse(process.argv[2]);
 const values = z
   .object({
-    databaseId: z.uuid(),
-    otherDatabaseId: z.uuid(),
-    databaseName: z.string().min(1).max(100),
+    hyperdriveId: z.string().min(1).max(100),
+    otherHyperdriveId: z.string().min(1).max(100),
     appOrigin: z.url().regex(/^https:\/\//),
     issuer: z.url().regex(/^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com$/),
     audience: z.string().min(1),
@@ -22,9 +21,8 @@ const values = z
     telegramDeliveryEnabled: z.enum(["true", "false"]),
   })
   .parse({
-    databaseId: process.env.SPI_D1_DATABASE_ID,
-    otherDatabaseId: process.env.SPI_OTHER_D1_DATABASE_ID,
-    databaseName: process.env.SPI_D1_DATABASE_NAME,
+    hyperdriveId: process.env.SPI_HYPERDRIVE_ID,
+    otherHyperdriveId: process.env.SPI_OTHER_HYPERDRIVE_ID,
     appOrigin: process.env.SPI_APP_ORIGIN,
     issuer: process.env.SPI_ACCESS_ISSUER,
     audience: process.env.SPI_ACCESS_AUDIENCE,
@@ -43,8 +41,8 @@ if (process.env.SPI_ENVIRONMENT !== environment)
   throw new Error("SPI_ENVIRONMENT tidak cocok dengan konfigurasi target.");
 if (environment === "preview" && values.telegramDeliveryEnabled !== "false")
   throw new Error("Pengiriman Telegram nyata wajib nonaktif di preview.");
-if (values.databaseId === values.otherDatabaseId)
-  throw new Error("Database preview dan production wajib berbeda.");
+if (values.hyperdriveId === values.otherHyperdriveId)
+  throw new Error("Hyperdrive preview dan production wajib berbeda.");
 if (
   new Set([
     values.authNamespace,
@@ -70,6 +68,7 @@ await writeFile(
       name: `spi-api-${environment}`,
       main: resolve("apps/worker/src/index.ts"),
       compatibility_date: "2026-09-08",
+      compatibility_flags: ["nodejs_compat"],
       workers_dev: false,
       triggers: { crons: ["0 3 * * *"] },
       routes: [
@@ -99,12 +98,10 @@ await writeFile(
           simple: { limit: 20, period: 60 },
         },
       ],
-      d1_databases: [
+      hyperdrive: [
         {
-          binding: "DB",
-          database_name: values.databaseName,
-          database_id: values.databaseId,
-          migrations_dir: resolve("migrations"),
+          binding: "HYPERDRIVE",
+          id: values.hyperdriveId,
         },
       ],
     },
