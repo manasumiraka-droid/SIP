@@ -1,0 +1,65 @@
+{
+  "name": "spi-sistem-pelayanan-ibadah",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node scripts/dev-local.mjs",
+    "dev:web": "vite --config apps/web/vite.config.ts",
+    "dev:api": "node scripts/wrangler.mjs dev --config apps/worker/wrangler.jsonc --local",
+    "dev:api:demo": "node scripts/wrangler.mjs dev --config apps/worker/wrangler.jsonc --local --var ENVIRONMENT:local --var APP_ORIGIN:http://localhost:5173 --var ACCESS_ISSUER:https://local-demo.cloudflareaccess.com --var ACCESS_AUDIENCE:local-demo --var ORGANIZATION_ID:local-demo --var LOCAL_DEVELOPMENT_EMAIL:demo-admin@example.invalid",
+    "db:migrate:local": "node scripts/wrangler.mjs d1 migrations apply spi-local --local --config apps/worker/wrangler.jsonc",
+    "db:seed:local": "node scripts/wrangler.mjs d1 execute spi-local --local --config apps/worker/wrangler.jsonc --file scripts/seeds/phase-1-demo.sql",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "vite build --config apps/web/vite.config.ts && node scripts/wrangler.mjs deploy --dry-run --config apps/worker/wrangler.jsonc --outdir dist/worker",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build",
+    "test:browser": "playwright test",
+    "security:secrets": "node scripts/scan-secrets.mjs",
+    "config:preview": "node scripts/generate-worker-config.mjs preview",
+    "config:production": "node scripts/generate-worker-config.mjs production",
+    "bootstrap:preview": "node scripts/bootstrap-cloud.mjs preview",
+    "bootstrap:production": "node scripts/bootstrap-cloud.mjs production",
+    "telegram:secrets:preview": "node scripts/configure-telegram-cloud.mjs preview",
+    "telegram:webhook:preview": "node scripts/configure-telegram-webhook.mjs preview",
+    "retention:preview": "node scripts/retention-cloud.mjs preview",
+    "retention:production": "node scripts/retention-cloud.mjs production"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "hono": "^4.13.7",
+    "jose": "^6.2.12",
+    "lucide-react": "^1.42.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "read-excel-file": "^9.3.10",
+    "tailwindcss": "^4.3.3",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260908.1",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.5.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "eslint": "^10.10.0",
+    "miniflare": "^5.20260907.0-alpha",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.0",
+    "vite": "^8.2.2",
+    "vitest": "^5.0.0",
+    "wrangler": "^4.129.1"
+  },
+  "overrides": {
+    "sharp": "0.35.4"
+  }
+}

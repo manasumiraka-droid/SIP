@@ -1,0 +1,8 @@
+node_modules
+dist
+.wrangler
+test-results
+playwright-report
+package-lock.json
+PRD_Sistem_Pelayanan_Ibadah_v1.2.md
+AI_RULES_SPI.md

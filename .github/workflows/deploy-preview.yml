@@ -1,0 +1,85 @@
+name: Deploy preview
+on:
+  workflow_dispatch:
+    inputs:
+      apply_migrations:
+        description: Apply reviewed migrations to preview before deployment
+        required: true
+        type: boolean
+        default: false
+      configure_telegram:
+        description: Configure Telegram secrets and webhook after Worker deploy
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  deploy:
+    environment: preview
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run security:secrets
+      - name: Require explicit preview migration approval
+        if: inputs.apply_migrations != true
+        run: exit 1
+      - name: Generate isolated preview configuration
+        run: npm run config:preview
+        env:
+          SPI_ENVIRONMENT: preview
+          SPI_D1_DATABASE_ID: ${{ secrets.SPI_D1_DATABASE_ID }}
+          SPI_OTHER_D1_DATABASE_ID: ${{ secrets.SPI_PRODUCTION_D1_DATABASE_ID }}
+          SPI_D1_DATABASE_NAME: ${{ vars.SPI_D1_DATABASE_NAME }}
+          SPI_APP_ORIGIN: ${{ vars.SPI_APP_ORIGIN }}
+          SPI_ACCESS_ISSUER: ${{ vars.SPI_ACCESS_ISSUER }}
+          SPI_ACCESS_AUDIENCE: ${{ secrets.SPI_ACCESS_AUDIENCE }}
+          SPI_ORGANIZATION_ID: ${{ vars.SPI_ORGANIZATION_ID }}
+          SPI_WORKER_ROUTE: ${{ vars.SPI_WORKER_ROUTE }}
+          SPI_TELEGRAM_WEBHOOK_ROUTE: ${{ vars.SPI_TELEGRAM_WEBHOOK_ROUTE }}
+          SPI_ZONE_NAME: ${{ vars.SPI_ZONE_NAME }}
+          SPI_TELEGRAM_DELIVERY_ENABLED: ${{ vars.SPI_TELEGRAM_DELIVERY_ENABLED }}
+          SPI_AUTH_RATE_LIMIT_NAMESPACE_ID: ${{ secrets.SPI_AUTH_RATE_LIMIT_NAMESPACE_ID }}
+          SPI_MUTATION_RATE_LIMIT_NAMESPACE_ID: ${{ secrets.SPI_MUTATION_RATE_LIMIT_NAMESPACE_ID }}
+          SPI_OTHER_AUTH_RATE_LIMIT_NAMESPACE_ID: ${{ secrets.SPI_PRODUCTION_AUTH_RATE_LIMIT_NAMESPACE_ID }}
+          SPI_OTHER_MUTATION_RATE_LIMIT_NAMESPACE_ID: ${{ secrets.SPI_PRODUCTION_MUTATION_RATE_LIMIT_NAMESPACE_ID }}
+      - name: Apply reviewed preview migrations
+        run: node scripts/wrangler.mjs d1 migrations apply DB --remote --config .wrangler/generated/preview.json
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Deploy preview Worker
+        run: node scripts/wrangler.mjs deploy --config .wrangler/generated/preview.json
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Configure Telegram Worker secrets
+        if: inputs.configure_telegram == true
+        run: node scripts/configure-telegram-cloud.mjs preview --apply
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+          SPI_TELEGRAM_SECRET_CONFIRM: configure-preview
+      - name: Register restricted Telegram preview webhook
+        if: inputs.configure_telegram == true
+        run: node scripts/configure-telegram-webhook.mjs preview --apply
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+          SPI_TELEGRAM_WEBHOOK_URL: ${{ vars.SPI_TELEGRAM_WEBHOOK_URL }}
+          SPI_APP_ORIGIN: ${{ vars.SPI_APP_ORIGIN }}
+          SPI_TELEGRAM_WEBHOOK_CONFIRM: configure-preview
+      - name: Deploy preview Pages artifact
+        run: node scripts/wrangler.mjs pages deploy dist/web --project-name "$SPI_PAGES_PROJECT" --branch preview
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SPI_PAGES_PROJECT: ${{ vars.SPI_PAGES_PROJECT }}
