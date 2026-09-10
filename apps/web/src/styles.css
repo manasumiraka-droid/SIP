@@ -685,6 +685,8 @@ button.secondary {
   gap: 18px;
 }
 .import-wizard {
+  min-width: 0;
+  max-width: 100%;
   margin-top: 24px;
   padding: 20px;
   border: 1px solid #ebe7f3;
@@ -702,12 +704,18 @@ button.secondary {
   font-weight: 700;
 }
 .file-control input {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 44px;
   padding: 8px;
   border: 1px solid #b9b2c4;
   border-radius: 9px;
 }
 .file-control select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 44px;
   border: 1px solid #b9b2c4;
   border-radius: 9px;
@@ -740,11 +748,15 @@ button.secondary {
 }
 .import-mapping label {
   display: grid;
+  min-width: 0;
   gap: 6px;
   font-size: 12px;
   font-weight: 700;
 }
 .import-mapping select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 44px;
   border: 1px solid #b9b2c4;
   border-radius: 8px;
