@@ -28,7 +28,7 @@ const accountUrl = new URL(input.cloudflareAccountUrl);
 const accountId = accountUrl.pathname.split("/").filter(Boolean)[0];
 if (!accountId || !/^[a-f0-9]{32}$/i.test(accountId))
   throw new Error("URL account Cloudflare tidak memuat account ID yang valid.");
-const app = new URL(input.appUrl);
+let app = new URL(input.appUrl);
 if (app.search || app.hash)
   throw new Error("SPI_APP_URL tidak boleh memuat query atau fragment.");
 const databaseUrl = new URL(input.databaseUrl);
@@ -244,28 +244,33 @@ const zone = zones
       app.hostname === candidate.name,
   )
   .sort((left, right) => right.name.length - left.name.length)[0];
-if (!zone)
-  throw new Error(
-    "Domain SPI_APP_URL tidak ditemukan pada zone Cloudflare account.",
+const deployTarget = zone ? "zone" : "workers_dev";
+if (!zone) {
+  const workerSubdomain = await cloudflare(
+    `/accounts/${accountId}/workers/subdomain`,
   );
-
-const pages = await cloudflare(
-  `/accounts/${accountId}/pages/projects/${defaults.pagesProject}`,
-  { allowNotFound: true },
-);
-if (!pages)
-  await cloudflare(`/accounts/${accountId}/pages/projects`, {
-    method: "POST",
-    body: { name: defaults.pagesProject, production_branch: "main" },
-  });
-const domains = await cloudflare(
-  `/accounts/${accountId}/pages/projects/${defaults.pagesProject}/domains`,
-);
-if (!domains.some((domain) => domain.name === app.hostname))
-  await cloudflare(
+  app = new URL(
+    `https://spi-api-preview.${workerSubdomain.subdomain}.workers.dev`,
+  );
+} else {
+  const pages = await cloudflare(
+    `/accounts/${accountId}/pages/projects/${defaults.pagesProject}`,
+    { allowNotFound: true },
+  );
+  if (!pages)
+    await cloudflare(`/accounts/${accountId}/pages/projects`, {
+      method: "POST",
+      body: { name: defaults.pagesProject, production_branch: "main" },
+    });
+  const domains = await cloudflare(
     `/accounts/${accountId}/pages/projects/${defaults.pagesProject}/domains`,
-    { method: "POST", body: { name: app.hostname } },
   );
+  if (!domains.some((domain) => domain.name === app.hostname))
+    await cloudflare(
+      `/accounts/${accountId}/pages/projects/${defaults.pagesProject}/domains`,
+      { method: "POST", body: { name: app.hostname } },
+    );
+}
 
 const hyperdrives = await cloudflare(
   `/accounts/${accountId}/hyperdrive/configs`,
@@ -339,20 +344,29 @@ for (const [name, value] of Object.entries(secrets))
   runGh(["secret", "set", name, "--env", "preview"], value);
 const variables = {
   SPI_APP_ORIGIN: app.origin,
+  SPI_DEPLOY_TARGET: deployTarget,
   SPI_AUTH_MODE: "preview_key",
   SPI_PREVIEW_AUTH_EMAIL: adminEmail,
   SPI_ORGANIZATION_ID: defaults.organizationId,
-  SPI_WORKER_ROUTE: `${app.hostname}/api/*`,
-  SPI_TELEGRAM_WEBHOOK_ROUTE: `${app.hostname}/telegram/webhook`,
   SPI_TELEGRAM_WEBHOOK_URL: `${app.origin}/telegram/webhook`,
-  SPI_ZONE_NAME: zone.name,
-  SPI_PAGES_PROJECT: defaults.pagesProject,
   SPI_TELEGRAM_DELIVERY_ENABLED: "false",
+  ...(zone
+    ? {
+        SPI_WORKER_ROUTE: `${app.hostname}/api/*`,
+        SPI_TELEGRAM_WEBHOOK_ROUTE: `${app.hostname}/telegram/webhook`,
+        SPI_ZONE_NAME: zone.name,
+        SPI_PAGES_PROJECT: defaults.pagesProject,
+      }
+    : {}),
 };
 for (const [name, value] of Object.entries(variables))
   runGh(["variable", "set", name, "--env", "preview", "--body", value]);
 
 await writeFile(resolve(".preview-login-key"), `${previewAuthKey}\n`, {
+  encoding: "utf8",
+  mode: 0o600,
+});
+await writeFile(resolve(".preview-app-url"), `${app.origin}\n`, {
   encoding: "utf8",
   mode: 0o600,
 });
@@ -367,5 +381,5 @@ runGh([
   "configure_telegram=false",
 ]);
 process.stdout.write(
-  "Environment preview selesai disiapkan dan workflow deploy sudah dikirim. Kunci login tersimpan di .preview-login-key.\n",
+  "Environment preview selesai disiapkan dan workflow deploy sudah dikirim. URL dan kunci login tersimpan di .preview-app-url serta .preview-login-key.\n",
 );

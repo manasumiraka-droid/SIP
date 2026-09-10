@@ -9,6 +9,7 @@ const common = {
     "postgresql://synthetic:synthetic@database.example.invalid/postgres",
   SPI_HYPERDRIVE_ID: "hyperdrive-preview",
   SPI_ENVIRONMENT: "preview",
+  SPI_DEPLOY_TARGET: "zone",
   SPI_AUTH_RATE_LIMIT_NAMESPACE_ID: "2001",
   SPI_MUTATION_RATE_LIMIT_NAMESPACE_ID: "2002",
   SPI_OTHER_AUTH_RATE_LIMIT_NAMESPACE_ID: "3001",
@@ -140,6 +141,35 @@ describe("operations scripts fail safely", () => {
         },
       ],
       hyperdrive: [{ binding: "HYPERDRIVE", id: "hyperdrive-preview" }],
+    });
+  });
+  it("generates a same-origin workers.dev app when no zone is available", () => {
+    const result = spawnSync(
+      process.execPath,
+      ["scripts/generate-worker-config.mjs", "preview"],
+      {
+        encoding: "utf8",
+        env: {
+          ...common,
+          SPI_DEPLOY_TARGET: "workers_dev",
+          SPI_OTHER_HYPERDRIVE_ID: "hyperdrive-production",
+          SPI_APP_ORIGIN: "https://spi-api-preview.example.workers.dev",
+          SPI_AUTH_MODE: "preview_key",
+          SPI_PREVIEW_AUTH_EMAIL: "admin@example.invalid",
+          SPI_ORGANIZATION_ID: "org-preview",
+          SPI_TELEGRAM_DELIVERY_ENABLED: "false",
+        },
+      },
+    );
+    expect(result.status).toBe(0);
+    const config = JSON.parse(
+      readFileSync(".wrangler/generated/preview.json", "utf8"),
+    ) as Record<string, unknown>;
+    expect(config.workers_dev).toBe(true);
+    expect(config.routes).toBeUndefined();
+    expect(config.assets).toMatchObject({
+      not_found_handling: "single-page-application",
+      run_worker_first: ["/api/*", "/telegram/webhook"],
     });
   });
   it("rejects a shared preview and production Hyperdrive", () => {

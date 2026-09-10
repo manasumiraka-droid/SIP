@@ -18,6 +18,8 @@ Perintah pertama hanya memvalidasi tanpa koneksi jaringan. Perintah kedua akan m
 
 `SPI_ADMIN_EMAIL_URL` memakai bentuk `mailto:nama@domain.tld`. Pada preview tanpa Zero Trust, alamat ini menjadi identitas yang dipetakan setelah kunci preview tervalidasi. Kunci acak dibuat otomatis saat `setup:preview -- --apply`, disimpan sebagai secret, dan salinan lokalnya berada di `.preview-login-key` yang diabaikan Git.
 
+Jika akun Cloudflare tidak mempunyai zone aktif, setup memakai domain gratis `workers.dev` dan mengemas hasil build React sebagai Worker Static Assets. URL final disimpan di `.preview-app-url`; UI dan API tetap berada pada origin yang sama.
+
 ### Jalur manual
 
 1. Buat project Supabase preview dan production. Ambil **Direct connection string** dari tombol Connect untuk pembuatan Hyperdrive. Untuk migrasi dari mesin IPv4-only, gunakan Session pooler bila direct IPv6 tidak dapat dijangkau. Jangan gunakan Transaction pooler untuk migrasi.

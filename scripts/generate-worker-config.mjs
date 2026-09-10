@@ -8,6 +8,7 @@ const values = z
     hyperdriveId: z.string().min(1).max(100),
     otherHyperdriveId: z.string().min(1).max(100),
     appOrigin: z.url().regex(/^https:\/\//),
+    deployTarget: z.enum(["zone", "workers_dev"]),
     authMode: z.enum(["cloudflare_access", "preview_key"]),
     previewAuthEmail: z.email().optional(),
     issuer: z
@@ -16,9 +17,18 @@ const values = z
       .optional(),
     audience: z.string().min(1).optional(),
     organizationId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
-    workerRoute: z.string().regex(/^[a-z0-9.-]+\/api\/\*$/),
-    telegramWebhookRoute: z.string().regex(/^[a-z0-9.-]+\/telegram\/webhook$/),
-    zoneName: z.string().regex(/^[a-z0-9.-]+$/),
+    workerRoute: z
+      .string()
+      .regex(/^[a-z0-9.-]+\/api\/\*$/)
+      .optional(),
+    telegramWebhookRoute: z
+      .string()
+      .regex(/^[a-z0-9.-]+\/telegram\/webhook$/)
+      .optional(),
+    zoneName: z
+      .string()
+      .regex(/^[a-z0-9.-]+$/)
+      .optional(),
     authNamespace: z.string().regex(/^\d+$/),
     mutationNamespace: z.string().regex(/^\d+$/),
     otherAuthNamespace: z.string().regex(/^\d+$/),
@@ -29,6 +39,7 @@ const values = z
     hyperdriveId: process.env.SPI_HYPERDRIVE_ID,
     otherHyperdriveId: process.env.SPI_OTHER_HYPERDRIVE_ID,
     appOrigin: process.env.SPI_APP_ORIGIN,
+    deployTarget: process.env.SPI_DEPLOY_TARGET,
     authMode: process.env.SPI_AUTH_MODE,
     previewAuthEmail: process.env.SPI_PREVIEW_AUTH_EMAIL,
     issuer: process.env.SPI_ACCESS_ISSUER,
@@ -69,8 +80,14 @@ if (
 )
   throw new Error("Namespace rate limit preview dan production wajib berbeda.");
 if (
+  values.deployTarget === "zone" &&
+  (!values.workerRoute || !values.telegramWebhookRoute || !values.zoneName)
+)
+  throw new Error("Route dan zone wajib diisi untuk deployment domain custom.");
+if (
+  values.deployTarget === "zone" &&
   values.telegramWebhookRoute !==
-  `${values.workerRoute.slice(0, -"/api/*".length)}/telegram/webhook`
+    `${values.workerRoute.slice(0, -"/api/*".length)}/telegram/webhook`
 )
   throw new Error(
     "Route webhook Telegram harus memakai host Worker API yang sama.",
@@ -85,15 +102,25 @@ await writeFile(
       main: resolve("apps/worker/src/index.ts"),
       compatibility_date: "2026-09-08",
       compatibility_flags: ["nodejs_compat"],
-      workers_dev: false,
+      workers_dev: values.deployTarget === "workers_dev",
       triggers: { crons: ["0 3 * * *"] },
-      routes: [
-        { pattern: values.workerRoute, zone_name: values.zoneName },
-        {
-          pattern: values.telegramWebhookRoute,
-          zone_name: values.zoneName,
-        },
-      ],
+      ...(values.deployTarget === "zone"
+        ? {
+            routes: [
+              { pattern: values.workerRoute, zone_name: values.zoneName },
+              {
+                pattern: values.telegramWebhookRoute,
+                zone_name: values.zoneName,
+              },
+            ],
+          }
+        : {
+            assets: {
+              directory: resolve("dist/web"),
+              not_found_handling: "single-page-application",
+              run_worker_first: ["/api/*", "/telegram/webhook"],
+            },
+          }),
       vars: {
         ENVIRONMENT: environment,
         APP_ORIGIN: values.appOrigin,
