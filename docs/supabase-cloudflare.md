@@ -4,6 +4,22 @@ Target online memakai satu database Supabase terpisah per environment dan satu k
 
 ## Urutan setup
 
+### Jalur otomatis — direkomendasikan
+
+Salin `.env.example` menjadi `.env`, lalu ganti tujuh nilai yang semuanya berupa **KEY atau URL**. Nilai organisasi, timezone, nama Pages/Worker/Hyperdrive, route, namespace rate limit, dan konfigurasi GitHub memakai default aman.
+
+```powershell
+Copy-Item .env.example .env
+npm run setup:preview
+npm run setup:preview -- --apply
+```
+
+Perintah pertama hanya memvalidasi tanpa koneksi jaringan. Perintah kedua akan menerapkan migrasi Supabase, membuat user database khusus dan Hyperdrive, membuat/menautkan Pages custom domain, mengisi GitHub Environment `preview`, bootstrap Super Admin, lalu menjalankan workflow deploy ke project preview khusus. Skrip tidak mencetak KEY, password, connection string, atau email admin.
+
+`SPI_ADMIN_EMAIL_URL` memakai bentuk `mailto:nama@domain.tld`; alamatnya harus sama dengan email yang diterima dari Cloudflare Access.
+
+### Jalur manual
+
 1. Buat project Supabase preview dan production. Ambil **Direct connection string** dari tombol Connect untuk pembuatan Hyperdrive. Untuk migrasi dari mesin IPv4-only, gunakan Session pooler bila direct IPv6 tidak dapat dijangkau. Jangan gunakan Transaction pooler untuk migrasi.
 2. Jalankan migrasi dengan `SUPABASE_DATABASE_URL` di environment proses: `npm run db:migrate:supabase`. URL tidak boleh diberikan sebagai argumen CLI karena dapat masuk shell history.
 3. Buat user PostgreSQL khusus Hyperdrive dengan password acak di SQL Editor, lalu beri hak minimum pada schema/tabel SPI. Jangan memakai key `anon` atau `service_role` sebagai password database. Setelah migrasi, contoh grant awalnya adalah `GRANT USAGE ON SCHEMA public TO hyperdrive_user; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO hyperdrive_user;`. Trigger dan constraint tetap membatasi operasi berisiko; retensi audit dijalankan terpisah dengan akun operator pemilik schema.

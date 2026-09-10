@@ -76,7 +76,7 @@ jobs:
           SPI_APP_ORIGIN: ${{ vars.SPI_APP_ORIGIN }}
           SPI_TELEGRAM_WEBHOOK_CONFIRM: configure-preview
       - name: Deploy preview Pages artifact
-        run: node scripts/wrangler.mjs pages deploy dist/web --project-name "$SPI_PAGES_PROJECT" --branch preview
+        run: node scripts/wrangler.mjs pages deploy dist/web --project-name "$SPI_PAGES_PROJECT" --branch main
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

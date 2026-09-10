@@ -14,6 +14,7 @@
     "db:migrate:local": "node scripts/wrangler.mjs d1 migrations apply spi-local --local --config apps/worker/wrangler.jsonc",
     "db:seed:local": "node scripts/wrangler.mjs d1 execute spi-local --local --config apps/worker/wrangler.jsonc --file scripts/seeds/phase-1-demo.sql",
     "db:migrate:supabase": "node scripts/supabase-migrate.mjs",
+    "setup:preview": "node --env-file-if-exists=.env scripts/setup-preview.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",

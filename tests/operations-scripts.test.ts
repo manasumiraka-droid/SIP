@@ -19,6 +19,29 @@ const telegram = {
   TELEGRAM_WEBHOOK_SECRET: "S".repeat(32),
 };
 describe("operations scripts fail safely", () => {
+  it("validates the key-and-URL-only preview setup without network access", () => {
+    const secrets = {
+      CLOUDFLARE_API_TOKEN: "synthetic-cloudflare-key-not-real",
+      CLOUDFLARE_ACCOUNT_URL:
+        "https://dash.cloudflare.com/11111111111111111111111111111111",
+      SUPABASE_DATABASE_URL:
+        "postgresql://postgres:synthetic@db.abcdefghijklmnopqrst.supabase.co:5432/postgres?sslmode=require",
+      SPI_APP_URL: "https://spi-preview.example.invalid",
+      SPI_ACCESS_ISSUER: "https://synthetic.cloudflareaccess.com",
+      SPI_ACCESS_AUDIENCE: "synthetic-access-audience-key",
+      SPI_ADMIN_EMAIL_URL: "mailto:admin@example.invalid",
+    };
+    const result = spawnSync(process.execPath, ["scripts/setup-preview.mjs"], {
+      encoding: "utf8",
+      env: { ...process.env, ...secrets },
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Input KEY/URL preview valid");
+    expect(result.stdout).toContain("belum ada resource");
+    for (const value of Object.values(secrets))
+      expect(`${result.stdout}${result.stderr}`).not.toContain(value);
+  });
+
   it("validates bootstrap inputs without network or sensitive output", () => {
     const result = spawnSync(
       process.execPath,

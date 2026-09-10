@@ -52,3 +52,5 @@ Schema dan API berbatas organisasi untuk bidang/peran, profil pelayan, capabilit
 Admin dapat mengunduh template kosong [form-jadwal-ibadah.xlsx](apps/web/public/form-jadwal-ibadah.xlsx), mengisinya, lalu mengunggahnya pada wizard impor. Template hanya berisi enam header yang diwajibkan PRD dan tidak memuat data jemaat.
 
 Template deployment preview dan generator konfigurasi terisolasi tersedia. Target online memakai Supabase PostgreSQL melalui Cloudflare Hyperdrive; D1 hanya dipertahankan sebagai emulator tes lokal. Workflow **Deploy preview** dapat membawa Pages, Worker, dan migrasi Supabase lebih dahulu dengan `configure_telegram=false`; pemasangan secret dan webhook Telegram hanya berjalan bila dipilih eksplisit. Lihat [setup Supabase–Cloudflare](docs/supabase-cloudflare.md), [runbook preview Cloudflare](docs/phase-2-preview-runbook.md), dan [closeout Fase 2.5](docs/phase-2.5-repository-cloudflare.md).
+
+Untuk setup preview otomatis, salin `.env.example` menjadi `.env`, isi hanya KEY/URL yang ditandai, jalankan `npm run setup:preview` untuk dry-run lalu `npm run setup:preview -- --apply`.
