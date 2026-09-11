@@ -119,6 +119,40 @@ async function main() {
     fullPage: true,
   });
 
+  // Test Edit Servant Modal
+  console.log("Testing Edit Servant modal...");
+  const firstEditBtn = page.locator('button:has-text("Edit")').first();
+  if (await firstEditBtn.isVisible()) {
+    await firstEditBtn.click();
+    await page.waitForTimeout(1000);
+    await page.screenshot({
+      path: path.join(targetDir, "preview_pelayanan_edit_modal.png"),
+      fullPage: true,
+    });
+    // Fill phone number and save
+    const phoneInput = page.locator('input[type="tel"]');
+    await phoneInput.fill("0812-9988-7766");
+    const saveBtn = page.locator('button:has-text("Simpan Data Pelayan")');
+    await saveBtn.click();
+    await page.waitForTimeout(2000);
+  }
+
+  // Test Delete Servant Confirmation Modal
+  console.log("Testing Delete Servant confirmation modal...");
+  const firstDeleteBtn = page.locator('button:has-text("Hapus")').first();
+  if (await firstDeleteBtn.isVisible()) {
+    await firstDeleteBtn.click();
+    await page.waitForTimeout(1000);
+    await page.screenshot({
+      path: path.join(targetDir, "preview_pelayanan_delete_modal.png"),
+      fullPage: true,
+    });
+    // Close delete modal with Batal
+    const batalBtn = page.locator('button:has-text("Batal")').last();
+    if (await batalBtn.isVisible()) await batalBtn.click();
+    await page.waitForTimeout(500);
+  }
+
   // 11. Pelayanan Menu (Jenis Peran Pelayanan tab)
   console.log("Capturing 11. Pelayanan Menu (Jenis Peran Pelayanan)...");
   const peranTabBtn = page.locator('button:has-text("Jenis Peran Pelayanan")');

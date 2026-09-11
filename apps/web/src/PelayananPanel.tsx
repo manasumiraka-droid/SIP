@@ -932,9 +932,10 @@ export function PelayananPanel({
   return (
     <div
       style={{
-        maxWidth: "1140px",
+        width: "100%",
+        maxWidth: "1240px",
         margin: "0 auto",
-        padding: "24px 16px",
+        padding: "24px 20px",
       }}
     >
       {/* Header */}
@@ -1345,7 +1346,7 @@ export function PelayananPanel({
               borderRadius: "12px",
               border: "1px solid #e2e8f0",
               boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-              overflow: "hidden",
+              overflowX: "auto",
             }}
           >
             {loadingServants && servants.length === 0 ? (
@@ -1420,6 +1421,7 @@ export function PelayananPanel({
               <table
                 style={{
                   width: "100%",
+                  minWidth: "850px",
                   borderCollapse: "collapse",
                   textAlign: "left",
                   fontSize: "0.875rem",
@@ -1943,7 +1945,7 @@ export function PelayananPanel({
               borderRadius: "12px",
               border: "1px solid #e2e8f0",
               boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-              overflow: "hidden",
+              overflowX: "auto",
             }}
           >
             {loadingRoles && roles.length === 0 ? (
@@ -2015,6 +2017,7 @@ export function PelayananPanel({
               <table
                 style={{
                   width: "100%",
+                  minWidth: "980px",
                   borderCollapse: "collapse",
                   textAlign: "left",
                   fontSize: "0.875rem",
@@ -2344,7 +2347,7 @@ export function PelayananPanel({
               borderRadius: "12px",
               border: "1px solid #e2e8f0",
               boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-              overflow: "hidden",
+              overflowX: "auto",
             }}
           >
             {fields.length === 0 ? (
@@ -2366,6 +2369,7 @@ export function PelayananPanel({
               <table
                 style={{
                   width: "100%",
+                  minWidth: "650px",
                   borderCollapse: "collapse",
                   textAlign: "left",
                   fontSize: "0.875rem",
