@@ -2,10 +2,12 @@ import React, { useEffect, useState } from "react";
 import {
   createNote,
   downloadAttendanceCsv,
+  fetchMyReport,
   fetchNotes,
   fetchOrganizationReport,
   type NoteCategory,
   type OrganizationReportData,
+  type ServantReportData,
   type ServiceNoteSummary,
 } from "./performance-client";
 
@@ -16,6 +18,9 @@ type Props = {
 export const PerformanceReportsPanel: React.FC<Props> = () => {
   const [activeTab, setActiveTab] = useState<"overview" | "notes">("overview");
   const [report, setReport] = useState<OrganizationReportData | null>(null);
+  const [servantReport, setServantReport] = useState<ServantReportData | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -37,11 +42,23 @@ export const PerformanceReportsPanel: React.FC<Props> = () => {
     setLoading(true);
     setErrorMessage(null);
     fetchOrganizationReport()
-      .then(setReport)
-      .catch((err: unknown) => {
-        setErrorMessage(
-          err instanceof Error ? err.message : "Gagal memuat rekap.",
-        );
+      .then((data) => {
+        setReport(data);
+        setServantReport(null);
+      })
+      .catch(async () => {
+        // Fallback for servant role who only has access to personal report
+        try {
+          const myData = await fetchMyReport();
+          setServantReport(myData);
+          setReport(null);
+        } catch (myErr: unknown) {
+          setErrorMessage(
+            myErr instanceof Error
+              ? myErr.message
+              : "Gagal memuat rekap laporan.",
+          );
+        }
       })
       .finally(() => setLoading(false));
   };
@@ -557,6 +574,375 @@ export const PerformanceReportsPanel: React.FC<Props> = () => {
               )}
             </div>
           </div>
+        </div>
+      ) : activeTab === "overview" && servantReport ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          <div
+            style={{
+              backgroundColor: "#f0fdf4",
+              border: "1px solid #bbf7d0",
+              borderRadius: "10px",
+              padding: "16px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "12px",
+            }}
+          >
+            <div>
+              <span
+                style={{
+                  fontSize: "0.8125rem",
+                  color: "#166534",
+                  fontWeight: 600,
+                }}
+              >
+                STATISTIK PELAYANAN PRIBADI
+              </span>
+              <h3
+                style={{
+                  margin: "4px 0 0",
+                  color: "#14532d",
+                  fontSize: "1.25rem",
+                }}
+              >
+                {servantReport.displayName}
+              </h3>
+            </div>
+            <span
+              style={{
+                backgroundColor: "#dcfce7",
+                color: "#15803d",
+                padding: "4px 10px",
+                borderRadius: "20px",
+                fontSize: "0.8125rem",
+                fontWeight: 600,
+              }}
+            >
+              Pelayan Aktif
+            </span>
+          </div>
+
+          {/* Personal Summary Cards */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: "16px",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "10px",
+                padding: "16px",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "0.8125rem",
+                  color: "#64748b",
+                  fontWeight: 500,
+                }}
+              >
+                Total Penugasan
+              </span>
+              <div
+                style={{
+                  fontSize: "1.75rem",
+                  fontWeight: 700,
+                  color: "#0f172a",
+                  marginTop: "4px",
+                }}
+              >
+                {servantReport.totalAssignments}
+              </div>
+              <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
+                Jadwal pelayanan terdaftar
+              </span>
+            </div>
+
+            <div
+              style={{
+                backgroundColor: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "10px",
+                padding: "16px",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "0.8125rem",
+                  color: "#64748b",
+                  fontWeight: 500,
+                }}
+              >
+                Konfirmasi Kehadiran
+              </span>
+              <div
+                style={{
+                  fontSize: "1.75rem",
+                  fontWeight: 700,
+                  color: "#2563eb",
+                  marginTop: "4px",
+                }}
+              >
+                {(servantReport.confirmationRate * 100).toFixed(0)}%
+              </div>
+              <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
+                {servantReport.acceptedAssignments} dari{" "}
+                {servantReport.totalAssignments} dikonfirmasi
+              </span>
+            </div>
+
+            <div
+              style={{
+                backgroundColor: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "10px",
+                padding: "16px",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "0.8125rem",
+                  color: "#64748b",
+                  fontWeight: 500,
+                }}
+              >
+                Tingkat Kehadiran Faktual
+              </span>
+              <div
+                style={{
+                  fontSize: "1.75rem",
+                  fontWeight: 700,
+                  color: "#16a34a",
+                  marginTop: "4px",
+                }}
+              >
+                {(servantReport.attendanceRate * 100).toFixed(0)}%
+              </div>
+              <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
+                Berdasarkan presensi ibadah
+              </span>
+            </div>
+
+            <div
+              style={{
+                backgroundColor: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "10px",
+                padding: "16px",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "0.8125rem",
+                  color: "#64748b",
+                  fontWeight: 500,
+                }}
+              >
+                Tugas Pengganti
+              </span>
+              <div
+                style={{
+                  fontSize: "1.75rem",
+                  fontWeight: 700,
+                  color: "#0891b2",
+                  marginTop: "4px",
+                }}
+              >
+                {servantReport.backupDutiesAccepted}
+              </div>
+              <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
+                Menolong saat rekan berhalangan
+              </span>
+            </div>
+          </div>
+
+          {/* Detailed Breakdown */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+              gap: "20px",
+            }}
+          >
+            {/* Presensi Breakdown */}
+            <div
+              style={{
+                backgroundColor: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "10px",
+                padding: "20px",
+              }}
+            >
+              <h4
+                style={{
+                  margin: "0 0 16px",
+                  fontSize: "1rem",
+                  color: "#0f172a",
+                }}
+              >
+                Rincian Kehadiran Faktual
+              </h4>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                {[
+                  {
+                    label: "Hadir Tepat Waktu",
+                    count: servantReport.attendanceBreakdown.present,
+                    color: "#16a34a",
+                  },
+                  {
+                    label: "Terlambat",
+                    count: servantReport.attendanceBreakdown.late,
+                    color: "#ca8a04",
+                  },
+                  {
+                    label: "Izin / Berhalangan",
+                    count: servantReport.attendanceBreakdown.absent,
+                    color: "#dc2626",
+                  },
+                  {
+                    label: "Digantikan",
+                    count: servantReport.attendanceBreakdown.replaced,
+                    color: "#64748b",
+                  },
+                ].map((item) => {
+                  const total =
+                    servantReport.attendanceBreakdown.present +
+                    servantReport.attendanceBreakdown.late +
+                    servantReport.attendanceBreakdown.absent +
+                    servantReport.attendanceBreakdown.replaced;
+                  const pct =
+                    total > 0 ? Math.round((item.count / total) * 100) : 0;
+                  return (
+                    <div key={item.label}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontSize: "0.8125rem",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        <span style={{ color: "#334155" }}>{item.label}</span>
+                        <span style={{ fontWeight: 600, color: "#0f172a" }}>
+                          {item.count} ({pct}%)
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          width: "100%",
+                          height: "8px",
+                          backgroundColor: "#f1f5f9",
+                          borderRadius: "4px",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${pct}%`,
+                            height: "100%",
+                            backgroundColor: item.color,
+                            borderRadius: "4px",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Roles Breakdown */}
+            <div
+              style={{
+                backgroundColor: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "10px",
+                padding: "20px",
+              }}
+            >
+              <h4
+                style={{
+                  margin: "0 0 16px",
+                  fontSize: "1rem",
+                  color: "#0f172a",
+                }}
+              >
+                Peran yang Dilayani
+              </h4>
+              {servantReport.rolesServed.length === 0 ? (
+                <div style={{ color: "#94a3b8", fontSize: "0.875rem" }}>
+                  Belum ada catatan riwayat peran.
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
+                >
+                  {servantReport.rolesServed.map((r) => {
+                    const maxAsg = Math.max(
+                      ...servantReport.rolesServed.map((x) => x.count),
+                      1,
+                    );
+                    const pct = Math.round((r.count / maxAsg) * 100);
+                    return (
+                      <div key={r.roleCode}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: "0.8125rem",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          <span style={{ color: "#334155" }}>{r.roleName}</span>
+                          <span style={{ fontWeight: 600, color: "#0f172a" }}>
+                            {r.count} kali
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "8px",
+                            backgroundColor: "#f1f5f9",
+                            borderRadius: "4px",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${pct}%`,
+                              height: "100%",
+                              backgroundColor: "#3b82f6",
+                              borderRadius: "4px",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : activeTab === "overview" && !report && !servantReport ? (
+        <div style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
+          Tidak ada data laporan yang dapat ditampilkan.
         </div>
       ) : (
         /* Notes Tab */

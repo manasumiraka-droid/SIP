@@ -12,8 +12,10 @@ import "./styles.css";
 import { ProductShell } from "./ProductShell";
 import {
   getPreviewAuthKey,
+  getPreviewPersonaEmail,
   installAuthenticatedFetch,
   setPreviewAuthKey,
+  setPreviewPersonaEmail,
 } from "./api";
 installAuthenticatedFetch();
 type View =
@@ -22,6 +24,9 @@ type View =
   | {
       state: "ready";
       name: string;
+      email: string;
+      roles: string[];
+      permissions: string[];
       timezone: string;
       canManageRoles: boolean;
       canReadAudit: boolean;
@@ -35,6 +40,9 @@ function App() {
       ? {
           state: "ready",
           name: "Maria",
+          email: "maria@example.com",
+          roles: ["coordinator"],
+          permissions: [],
           timezone: "Asia/Makassar",
           canManageRoles: false,
           canReadAudit: false,
@@ -84,6 +92,9 @@ function App() {
         setView({
           state: "ready",
           name: identity.data.displayName,
+          email: getPreviewPersonaEmail() || "manasumiraka@gmail.com",
+          roles: identity.data.roles,
+          permissions: identity.data.permissions,
           timezone: identity.data.timezone,
           canManageRoles:
             identity.data.permissions.includes("user.manage_role"),
@@ -101,17 +112,27 @@ function App() {
     void loadIdentity();
     return () => controller.abort();
   }, [attempt, preview]);
+
+  const handleSwitchPersona = (email: string) => {
+    setPreviewPersonaEmail(email);
+    setAttempt((value) => value + 1);
+  };
+
   return (
     <>
       {view.state === "ready" ? (
         <ProductShell
           name={view.name}
+          email={view.email}
+          roles={view.roles}
+          permissions={view.permissions}
           timezone={view.timezone}
           canManageRoles={view.canManageRoles}
           canReadAudit={view.canReadAudit}
           canImportSchedules={view.canImportSchedules}
           canManageServants={view.canManageServants}
           onAccessChanged={() => setAttempt((value) => value + 1)}
+          onSwitchPersona={handleSwitchPersona}
         />
       ) : (
         <>

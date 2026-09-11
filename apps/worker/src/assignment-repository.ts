@@ -355,3 +355,68 @@ export async function changeAssignmentStatus(
     status: update.status,
   };
 }
+
+export async function listMyAssignments(db: D1Database, actor: Actor) {
+  const result = await db
+    .prepare(
+      `SELECT
+        a.id, a.worship_service_id AS serviceId, ws.theme, ws.starts_at AS startsAt,
+        ws.assembly_at AS assemblyAt, ws.ends_at AS endsAt, ws.location, ws.status AS serviceStatus,
+        sr.id AS roleId, sr.code AS roleCode, sr.name AS roleName, a.slot_number AS slotNumber,
+        a.status, a.version, s.id AS servantId, s.display_name AS servantName
+      FROM assignments a
+      JOIN worship_services ws ON ws.organization_id = a.organization_id AND ws.id = a.worship_service_id
+      JOIN service_roles sr ON sr.organization_id = a.organization_id AND sr.id = a.service_role_id
+      JOIN servants s ON s.organization_id = a.organization_id AND s.id = a.servant_id
+      WHERE a.organization_id = ? AND (
+        s.user_id = ? OR (
+          NOT EXISTS (SELECT 1 FROM servants WHERE organization_id = ? AND user_id = ?)
+          AND ? IN ('super_admin', 'admin')
+        )
+      ) AND a.status NOT IN ('cancelled', 'reassigned')
+      ORDER BY ws.starts_at ASC, sr.code ASC`,
+    )
+    .bind(
+      actor.organizationId,
+      actor.id,
+      actor.organizationId,
+      actor.id,
+      actor.roles[0] ?? "",
+    )
+    .all();
+  return result.results;
+}
+
+export async function queryAssignments(
+  db: D1Database,
+  actor: Actor,
+  filter: { status?: string; serviceId?: string },
+) {
+  let sql = `
+    SELECT
+      a.id, a.worship_service_id AS serviceId, ws.theme, ws.starts_at AS startsAt,
+      ws.assembly_at AS assemblyAt, ws.ends_at AS endsAt, ws.location, ws.status AS serviceStatus,
+      sr.id AS roleId, sr.code AS roleCode, sr.name AS roleName, a.slot_number AS slotNumber,
+      a.status, a.version, s.id AS servantId, s.display_name AS servantName
+    FROM assignments a
+    JOIN worship_services ws ON ws.organization_id = a.organization_id AND ws.id = a.worship_service_id
+    JOIN service_roles sr ON sr.organization_id = a.organization_id AND sr.id = a.service_role_id
+    JOIN servants s ON s.organization_id = a.organization_id AND s.id = a.servant_id
+    WHERE a.organization_id = ? AND a.status NOT IN ('cancelled', 'reassigned')
+  `;
+  const params: unknown[] = [actor.organizationId];
+  if (filter.status) {
+    sql += ` AND a.status = ?`;
+    params.push(filter.status);
+  }
+  if (filter.serviceId) {
+    sql += ` AND a.worship_service_id = ?`;
+    params.push(filter.serviceId);
+  }
+  sql += ` ORDER BY ws.starts_at ASC, sr.code ASC`;
+  const result = await db
+    .prepare(sql)
+    .bind(...params)
+    .all();
+  return result.results;
+}

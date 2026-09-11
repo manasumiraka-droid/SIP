@@ -11,6 +11,8 @@ import {
 import {
   changeAssignmentStatus,
   createAssignment,
+  listMyAssignments,
+  queryAssignments,
 } from "./assignment-repository";
 import { limitMutation, readMutation } from "./mutation-request";
 
@@ -26,6 +28,23 @@ const boundedBody = bodyLimit({
 });
 export function assignmentRoutes() {
   const routes = new Hono<AppEnvironment>();
+
+  routes.get("/my", async (c) => {
+    const actor = c.get("actor");
+    const assignments = await listMyAssignments(c.env.DB, actor);
+    return c.json({ request_id: c.get("requestId"), data: assignments });
+  });
+
+  routes.get("/", async (c) => {
+    const actor = c.get("actor");
+    const status = c.req.query("status");
+    const serviceId = c.req.query("serviceId");
+    const assignments = await queryAssignments(c.env.DB, actor, {
+      status,
+      serviceId,
+    });
+    return c.json({ request_id: c.get("requestId"), data: assignments });
+  });
   routes.post("/", boundedBody, async (c) => {
     const actor = c.get("actor");
     if (!effectivePermissions(actor).includes("assignment.create_update"))

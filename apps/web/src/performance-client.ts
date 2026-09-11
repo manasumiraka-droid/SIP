@@ -157,6 +157,16 @@ export async function fetchServantReport(
   return payload.data;
 }
 
+export async function fetchMyReport(): Promise<ServantReportData> {
+  const response = await fetch("/api/v1/reports/me", {
+    credentials: "same-origin",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) throw new Error("Gagal memuat statistik pelayanan Anda.");
+  const payload = (await response.json()) as { data: ServantReportData };
+  return payload.data;
+}
+
 export async function fetchNotes(filter?: {
   serviceId?: string;
   servantId?: string;

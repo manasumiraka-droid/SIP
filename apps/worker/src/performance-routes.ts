@@ -129,7 +129,39 @@ export function performanceRoutes() {
     return c.json({ request_id: c.get("requestId"), data: result });
   });
 
-  // 7. Individual servant report
+  // 7. My personal servant report
+  routes.get("/reports/me", async (c) => {
+    const actor = c.get("actor");
+    const servant = await c.env.DB.prepare(
+      "SELECT id FROM servants WHERE organization_id = ? AND user_id = ? LIMIT 1",
+    )
+      .bind(actor.organizationId, actor.id)
+      .first<{ id: string }>();
+    if (!servant) {
+      return c.json({
+        request_id: c.get("requestId"),
+        data: {
+          servantId: "",
+          displayName: actor.displayName,
+          totalAssignments: 0,
+          acceptedAssignments: 0,
+          confirmationRate: 100,
+          attendanceRate: 100,
+          attendanceBreakdown: { present: 0, late: 0, absent: 0, replaced: 0 },
+          backupDutiesAccepted: 0,
+          rolesServed: [],
+        },
+      });
+    }
+    const result = await getServantPerformanceReport(
+      c.env.DB,
+      actor,
+      servant.id,
+    );
+    return c.json({ request_id: c.get("requestId"), data: result });
+  });
+
+  // 8. Individual servant report
   routes.get("/reports/servants/:id", async (c) => {
     const servantId = resourceIdSchema.parse(c.req.param("id"));
     const result = await getServantPerformanceReport(

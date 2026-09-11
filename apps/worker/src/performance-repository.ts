@@ -229,20 +229,20 @@ export async function getServiceAttendance(
 
   let sql = `
     SELECT
-      ar.id, ar.organization_id AS organizationId, ar.service_id AS serviceId,
-      ar.assignment_id AS assignmentId, ar.servant_id AS servantId,
+      COALESCE(ar.id, a.id) AS id, a.organization_id AS organizationId, a.worship_service_id AS serviceId,
+      a.id AS assignmentId, a.servant_id AS servantId,
       s.display_name AS servantName,
       sr.code AS roleCode, sr.name AS roleName,
       a.status AS assignmentStatus,
-      ar.status AS attendanceStatus,
+      COALESCE(ar.status, 'present') AS attendanceStatus,
       ar.checkin_time AS checkinTime,
-      ar.notes, ar.recorded_by AS recordedBy,
-      ar.updated_at AS recordedAt
-    FROM attendance_records ar
-    JOIN assignments a ON a.organization_id = ar.organization_id AND a.id = ar.assignment_id
-    JOIN servants s ON s.organization_id = ar.organization_id AND s.id = ar.servant_id
-    JOIN service_roles sr ON sr.organization_id = ar.organization_id AND sr.id = a.service_role_id
-    WHERE ar.organization_id = ? AND ar.service_id = ?
+      ar.notes, COALESCE(ar.recorded_by, '') AS recordedBy,
+      COALESCE(ar.updated_at, a.updated_at) AS recordedAt
+    FROM assignments a
+    JOIN servants s ON s.organization_id = a.organization_id AND s.id = a.servant_id
+    JOIN service_roles sr ON sr.organization_id = a.organization_id AND sr.id = a.service_role_id
+    LEFT JOIN attendance_records ar ON ar.organization_id = a.organization_id AND ar.assignment_id = a.id
+    WHERE a.organization_id = ? AND a.worship_service_id = ? AND a.status NOT IN ('cancelled','reassigned')
   `;
   const params: unknown[] = [actor.organizationId, serviceId];
 

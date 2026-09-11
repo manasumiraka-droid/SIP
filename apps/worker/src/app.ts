@@ -132,6 +132,12 @@ export function createApp(dependencies: Dependencies = defaults) {
     try {
       if (!token || token.length > 16384) throw new Error("Missing assertion");
       email = await dependencies.verify(token, c.env);
+      if (c.env.AUTH_MODE === "preview_key") {
+        const previewEmail = c.req.header("X-Preview-As-Email");
+        if (previewEmail && previewEmail.length <= 254) {
+          email = previewEmail.toLowerCase();
+        }
+      }
     } catch (error) {
       console.error(
         "Auth verify error:",
