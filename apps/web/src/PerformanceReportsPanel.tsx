@@ -16,7 +16,9 @@ type Props = {
 };
 
 export const PerformanceReportsPanel: React.FC<Props> = () => {
-  const [activeTab, setActiveTab] = useState<"overview" | "notes">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "personal" | "notes">(
+    "overview",
+  );
   const [report, setReport] = useState<OrganizationReportData | null>(null);
   const [servantReport, setServantReport] = useState<ServantReportData | null>(
     null,
@@ -44,14 +46,13 @@ export const PerformanceReportsPanel: React.FC<Props> = () => {
     fetchOrganizationReport()
       .then((data) => {
         setReport(data);
-        setServantReport(null);
       })
       .catch(async () => {
         // Fallback for servant role who only has access to personal report
         try {
           const myData = await fetchMyReport();
           setServantReport(myData);
-          setReport(null);
+          setActiveTab("personal");
         } catch (myErr: unknown) {
           setErrorMessage(
             myErr instanceof Error
@@ -59,6 +60,23 @@ export const PerformanceReportsPanel: React.FC<Props> = () => {
               : "Gagal memuat rekap laporan.",
           );
         }
+      })
+      .finally(() => setLoading(false));
+  };
+
+  const loadPersonalReport = () => {
+    setLoading(true);
+    setErrorMessage(null);
+    fetchMyReport()
+      .then((myData) => {
+        setServantReport(myData);
+      })
+      .catch((myErr: unknown) => {
+        setErrorMessage(
+          myErr instanceof Error
+            ? myErr.message
+            : "Gagal memuat laporan pelayanan pribadi.",
+        );
       })
       .finally(() => setLoading(false));
   };
@@ -78,11 +96,11 @@ export const PerformanceReportsPanel: React.FC<Props> = () => {
   };
 
   useEffect(() => {
-    loadReport();
-  }, []);
-
-  useEffect(() => {
-    if (activeTab === "notes") {
+    if (activeTab === "overview") {
+      loadReport();
+    } else if (activeTab === "personal") {
+      loadPersonalReport();
+    } else if (activeTab === "notes") {
       loadNotes();
     }
   }, [activeTab, noteCategoryFilter]);
@@ -203,7 +221,23 @@ export const PerformanceReportsPanel: React.FC<Props> = () => {
             cursor: "pointer",
           }}
         >
-          Ringkasan & Metrik
+          Ringkasan Organisasi
+        </button>
+        <button
+          onClick={() => setActiveTab("personal")}
+          style={{
+            padding: "10px 18px",
+            border: "none",
+            background: "none",
+            fontSize: "0.875rem",
+            fontWeight: activeTab === "personal" ? 600 : 400,
+            color: activeTab === "personal" ? "#2563eb" : "#64748b",
+            borderBottom:
+              activeTab === "personal" ? "2px solid #2563eb" : "none",
+            cursor: "pointer",
+          }}
+        >
+          Laporan Pelayanan Saya
         </button>
         <button
           onClick={() => setActiveTab("notes")}
@@ -575,7 +609,23 @@ export const PerformanceReportsPanel: React.FC<Props> = () => {
             </div>
           </div>
         </div>
-      ) : activeTab === "overview" && servantReport ? (
+      ) : activeTab === "overview" && !report ? (
+        <div style={{ textAlign: "center", padding: "40px", color: "#64748b" }}>
+          <p style={{ margin: 0, fontWeight: 500 }}>
+            Belum ada data laporan organisasi atau akun Anda memiliki akses
+            terbatas.
+          </p>
+          <p
+            style={{
+              margin: "8px 0 0",
+              fontSize: "0.875rem",
+              color: "#94a3b8",
+            }}
+          >
+            Silakan beralih ke tab <strong>Laporan Pelayanan Saya</strong>.
+          </p>
+        </div>
+      ) : activeTab === "personal" && servantReport ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           <div
             style={{
@@ -946,9 +996,9 @@ export const PerformanceReportsPanel: React.FC<Props> = () => {
             </div>
           </div>
         </div>
-      ) : activeTab === "overview" && !report && !servantReport ? (
+      ) : activeTab === "personal" && !servantReport ? (
         <div style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
-          Tidak ada data laporan yang dapat ditampilkan.
+          Tidak ada data laporan pelayanan pribadi untuk akun ini.
         </div>
       ) : (
         /* Notes Tab */
