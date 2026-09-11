@@ -17,13 +17,23 @@ export async function listManagedUsers(
   limit: number,
   ownerId: string | null,
 ) {
-  const rows = await db
-    .prepare(
-      `SELECT u.id, u.display_name AS displayName, u.status, u.version,
+  const query =
+    ownerId !== null
+      ? `SELECT u.id, u.display_name AS displayName, u.status, u.version,
     COALESCE((SELECT json_group_array(role_id) FROM (SELECT role_id FROM user_roles WHERE organization_id = u.organization_id AND user_id = u.id AND revoked_at IS NULL ORDER BY role_id) AS r), '[]') AS rolesJson
-    FROM users u WHERE u.organization_id = ? AND u.id > ? AND (? IS NULL OR u.id = ?) ORDER BY u.id LIMIT ?`,
-    )
-    .bind(organizationId, cursor, ownerId, ownerId, limit + 1)
+    FROM users u WHERE u.organization_id = ? AND u.id > ? AND u.id = ? ORDER BY u.id LIMIT ?`
+      : `SELECT u.id, u.display_name AS displayName, u.status, u.version,
+    COALESCE((SELECT json_group_array(role_id) FROM (SELECT role_id FROM user_roles WHERE organization_id = u.organization_id AND user_id = u.id AND revoked_at IS NULL ORDER BY role_id) AS r), '[]') AS rolesJson
+    FROM users u WHERE u.organization_id = ? AND u.id > ? ORDER BY u.id LIMIT ?`;
+
+  const bindings =
+    ownerId !== null
+      ? [organizationId, cursor, ownerId, limit + 1]
+      : [organizationId, cursor, limit + 1];
+
+  const rows = await db
+    .prepare(query)
+    .bind(...bindings)
     .all<{
       id: string;
       displayName: string;
