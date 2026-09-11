@@ -132,7 +132,11 @@ export function createApp(dependencies: Dependencies = defaults) {
     try {
       if (!token || token.length > 16384) throw new Error("Missing assertion");
       email = await dependencies.verify(token, c.env);
-    } catch {
+    } catch (error) {
+      console.error(
+        "Auth verify error:",
+        error instanceof Error ? error.message : error,
+      );
       return c.json(
         {
           error: {
@@ -155,7 +159,15 @@ export function createApp(dependencies: Dependencies = defaults) {
       actor.status !== "active" ||
       actor.roles.length === 0 ||
       actor.organizationId !== c.env.ORGANIZATION_ID
-    )
+    ) {
+      console.error("Auth actor rejection:", {
+        email,
+        actorExists: Boolean(actor),
+        status: actor?.status,
+        roles: actor?.roles,
+        org: actor?.organizationId,
+        expectedOrg: c.env.ORGANIZATION_ID,
+      });
       return c.json(
         {
           error: {
@@ -167,6 +179,7 @@ export function createApp(dependencies: Dependencies = defaults) {
         },
         401,
       );
+    }
     c.set("actor", actor);
     await next();
   });
