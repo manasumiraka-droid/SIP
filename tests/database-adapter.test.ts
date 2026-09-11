@@ -17,6 +17,16 @@ describe("PostgreSQL query adapter", () => {
     );
   });
 
+  it("quotes camelCase column aliases to preserve casing in PostgreSQL", () => {
+    expect(
+      toPostgresQuery(
+        "SELECT id, organization_id AS organizationId, display_name AS displayName FROM users",
+      ),
+    ).toBe(
+      'SELECT id, organization_id AS "organizationId", display_name AS "displayName" FROM users',
+    );
+  });
+
   it("converts staged import JSON expansion", () => {
     const source =
       "INSERT INTO import_rows(id,batch_id,organization_id,row_number,source_number,raw_json,normalized_json,status,proposed_action,error_codes_json,warning_codes_json,created_at,updated_at) SELECT json_extract(value,'$.id'),?,?,json_extract(value,'$.rowNumber'),json_extract(value,'$.sourceNumber'),json_extract(value,'$.raw'),json_extract(value,'$.normalized'),json_extract(value,'$.status'),'create',json_extract(value,'$.normalized.errors'),json_extract(value,'$.normalized.warnings'),?,? FROM json_each(?)";

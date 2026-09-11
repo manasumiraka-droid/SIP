@@ -51,6 +51,7 @@ export function toPostgresQuery(query: string) {
   result = result
     .replaceAll("INSERT OR IGNORE INTO", "INSERT INTO")
     .replaceAll(" COLLATE NOCASE", "")
+    .replace(/\bas\s+([a-zA-Z0-9_]*[A-Z][a-zA-Z0-9_]*)\b/gi, 'AS "$1"')
     .replaceAll("json_object(", "jsonb_build_object(")
     .replaceAll("json_group_array(", "json_agg(")
     .replace(/json_each\((\$\d+)\)/g, "jsonb_array_elements_text($1::jsonb)")
