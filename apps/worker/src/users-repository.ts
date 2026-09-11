@@ -20,7 +20,7 @@ export async function listManagedUsers(
   const rows = await db
     .prepare(
       `SELECT u.id, u.display_name AS displayName, u.status, u.version,
-    (SELECT json_group_array(role_id) FROM (SELECT role_id FROM user_roles WHERE organization_id = u.organization_id AND user_id = u.id AND revoked_at IS NULL ORDER BY role_id)) AS rolesJson
+    COALESCE((SELECT json_group_array(role_id) FROM (SELECT role_id FROM user_roles WHERE organization_id = u.organization_id AND user_id = u.id AND revoked_at IS NULL ORDER BY role_id) AS r), '[]') AS rolesJson
     FROM users u WHERE u.organization_id = ? AND u.id > ? AND (? IS NULL OR u.id = ?) ORDER BY u.id LIMIT ?`,
     )
     .bind(organizationId, cursor, ownerId, ownerId, limit + 1)
@@ -34,7 +34,7 @@ export async function listManagedUsers(
   const users = rows.results.slice(0, limit).map(({ rolesJson, ...user }) => {
     const parsed = managedUserSchema.safeParse({
       ...user,
-      roles: JSON.parse(rolesJson),
+      roles: JSON.parse(rolesJson || "[]"),
     });
     if (!parsed.success) throw new Error("Persisted user invalid");
     return parsed.data;
