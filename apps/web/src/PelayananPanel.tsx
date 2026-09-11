@@ -935,7 +935,7 @@ export function PelayananPanel({
         width: "100%",
         maxWidth: "1240px",
         margin: "0 auto",
-        padding: "24px 20px",
+        padding: "16px 0 32px",
       }}
     >
       {/* Header */}
@@ -955,7 +955,7 @@ export function PelayananPanel({
             style={{
               letterSpacing: "0.08em",
               fontWeight: 700,
-              fontSize: "0.8rem",
+              fontSize: "0.78rem",
               color: "#6366f1",
               margin: "0 0 4px",
             }}
@@ -1018,7 +1018,7 @@ export function PelayananPanel({
       {statusMessage && (
         <div
           style={{
-            padding: "12px 16px",
+            padding: "10px 10px",
             marginBottom: "20px",
             borderRadius: "10px",
             fontSize: "0.9rem",
@@ -1421,7 +1421,7 @@ export function PelayananPanel({
               <table
                 style={{
                   width: "100%",
-                  minWidth: "850px",
+                  minWidth: "750px",
                   borderCollapse: "collapse",
                   textAlign: "left",
                   fontSize: "0.875rem",
@@ -1436,15 +1436,15 @@ export function PelayananPanel({
                       fontWeight: 600,
                     }}
                   >
-                    <th style={{ padding: "12px 16px" }}>Nama Pelayan</th>
-                    <th style={{ padding: "12px 16px" }}>No. Ponsel</th>
-                    <th style={{ padding: "12px 16px" }}>Jabatan</th>
-                    <th style={{ padding: "12px 16px" }}>Cakupan Peran</th>
-                    <th style={{ padding: "12px 16px" }}>Status</th>
+                    <th style={{ padding: "10px 10px" }}>Nama Pelayan</th>
+                    <th style={{ padding: "10px 10px" }}>No. Ponsel</th>
+                    <th style={{ padding: "10px 10px" }}>Jabatan</th>
+                    <th style={{ padding: "10px 10px" }}>Cakupan Peran</th>
+                    <th style={{ padding: "10px 10px" }}>Status</th>
                     {canManage && (
                       <th
                         style={{
-                          padding: "12px 16px",
+                          padding: "10px 10px",
                           textAlign: "right",
                           minWidth: "220px",
                         }}
@@ -1468,7 +1468,7 @@ export function PelayananPanel({
                           opacity: servant.status === "active" ? 1 : 0.6,
                         }}
                       >
-                        <td style={{ padding: "12px 16px" }}>
+                        <td style={{ padding: "10px 10px" }}>
                           <div
                             style={{
                               display: "flex",
@@ -1494,7 +1494,7 @@ export function PelayananPanel({
                                 justifyItems: "center",
                                 justifyContent: "center",
                                 fontWeight: 700,
-                                fontSize: "0.8rem",
+                                fontSize: "0.78rem",
                               }}
                             >
                               {servant.displayName
@@ -1530,7 +1530,7 @@ export function PelayananPanel({
                             </div>
                           </div>
                         </td>
-                        <td style={{ padding: "12px 16px" }}>
+                        <td style={{ padding: "10px 10px" }}>
                           {servant.phoneNumber ? (
                             <a
                               href={`tel:${servant.phoneNumber}`}
@@ -1550,7 +1550,7 @@ export function PelayananPanel({
                             <span style={{ color: "#94a3b8" }}>—</span>
                           )}
                         </td>
-                        <td style={{ padding: "12px 16px" }}>
+                        <td style={{ padding: "10px 10px" }}>
                           {isPenatua ? (
                             <span
                               style={{
@@ -1618,8 +1618,8 @@ export function PelayananPanel({
                         </td>
                         <td
                           style={{
-                            padding: "12px 16px",
-                            fontSize: "0.8rem",
+                            padding: "10px 10px",
+                            fontSize: "0.78rem",
                             color: "#475569",
                           }}
                         >
@@ -1637,7 +1637,7 @@ export function PelayananPanel({
                             </span>
                           )}
                         </td>
-                        <td style={{ padding: "12px 16px" }}>
+                        <td style={{ padding: "10px 10px" }}>
                           {servant.status === "active" ? (
                             <span
                               style={{
@@ -1669,7 +1669,7 @@ export function PelayananPanel({
                         {canManage && (
                           <td
                             style={{
-                              padding: "12px 16px",
+                              padding: "10px 10px",
                               textAlign: "right",
                             }}
                           >
@@ -1685,13 +1685,13 @@ export function PelayananPanel({
                                 onClick={() => handleOpenEditServant(servant)}
                                 title="Edit Data Pelayan"
                                 style={{
-                                  padding: "6px 10px",
+                                  padding: "5px 8px",
                                   borderRadius: "6px",
                                   border: "1px solid #cbd5e1",
                                   backgroundColor: "#ffffff",
                                   color: "#334155",
                                   cursor: "pointer",
-                                  fontSize: "0.8rem",
+                                  fontSize: "0.78rem",
                                   display: "inline-flex",
                                   alignItems: "center",
                                   gap: "4px",
@@ -1714,13 +1714,13 @@ export function PelayananPanel({
                                   }
                                   title="Nonaktifkan Pelayan"
                                   style={{
-                                    padding: "6px 10px",
+                                    padding: "5px 8px",
                                     borderRadius: "6px",
                                     border: "1px solid #fed7aa",
                                     backgroundColor: "#fff7ed",
                                     color: "#c2410c",
                                     cursor: "pointer",
-                                    fontSize: "0.8rem",
+                                    fontSize: "0.78rem",
                                     display: "inline-flex",
                                     alignItems: "center",
                                     gap: "4px",
@@ -1738,13 +1738,13 @@ export function PelayananPanel({
                                   }
                                   title="Aktifkan Kembali"
                                   style={{
-                                    padding: "6px 10px",
+                                    padding: "5px 8px",
                                     borderRadius: "6px",
                                     border: "1px solid #bbf7d0",
                                     backgroundColor: "#f0fdf4",
                                     color: "#15803d",
                                     cursor: "pointer",
-                                    fontSize: "0.8rem",
+                                    fontSize: "0.78rem",
                                     display: "inline-flex",
                                     alignItems: "center",
                                     gap: "4px",
@@ -1762,13 +1762,13 @@ export function PelayananPanel({
                                 onClick={() => handleOpenDeleteServant(servant)}
                                 title="Hapus Data Pelayan"
                                 style={{
-                                  padding: "6px 10px",
+                                  padding: "5px 8px",
                                   borderRadius: "6px",
                                   border: "1px solid #fecdd3",
                                   backgroundColor: "#fff1f2",
                                   color: "#be123c",
                                   cursor: "pointer",
-                                  fontSize: "0.8rem",
+                                  fontSize: "0.78rem",
                                   display: "inline-flex",
                                   alignItems: "center",
                                   gap: "4px",
@@ -2017,7 +2017,7 @@ export function PelayananPanel({
               <table
                 style={{
                   width: "100%",
-                  minWidth: "980px",
+                  minWidth: "780px",
                   borderCollapse: "collapse",
                   textAlign: "left",
                   fontSize: "0.875rem",
@@ -2032,16 +2032,16 @@ export function PelayananPanel({
                       fontWeight: 600,
                     }}
                   >
-                    <th style={{ padding: "12px 16px" }}>Nama Peran</th>
-                    <th style={{ padding: "12px 16px" }}>Kode Sistem</th>
-                    <th style={{ padding: "12px 16px" }}>Bidang Pelayanan</th>
-                    <th style={{ padding: "12px 16px" }}>Kebutuhan Slot</th>
-                    <th style={{ padding: "12px 16px" }}>Kelayakan Jabatan</th>
-                    <th style={{ padding: "12px 16px" }}>Status</th>
+                    <th style={{ padding: "10px 10px" }}>Nama Peran</th>
+                    <th style={{ padding: "10px 10px" }}>Kode Sistem</th>
+                    <th style={{ padding: "10px 10px" }}>Bidang Pelayanan</th>
+                    <th style={{ padding: "10px 10px" }}>Kebutuhan Slot</th>
+                    <th style={{ padding: "10px 10px" }}>Kelayakan Jabatan</th>
+                    <th style={{ padding: "10px 10px" }}>Status</th>
                     {canManage && (
                       <th
                         style={{
-                          padding: "12px 16px",
+                          padding: "10px 10px",
                           textAlign: "right",
                           minWidth: "220px",
                         }}
@@ -2069,7 +2069,7 @@ export function PelayananPanel({
                           opacity: role.active ? 1 : 0.6,
                         }}
                       >
-                        <td style={{ padding: "12px 16px" }}>
+                        <td style={{ padding: "10px 10px" }}>
                           <div
                             style={{
                               display: "flex",
@@ -2101,26 +2101,26 @@ export function PelayananPanel({
                             )}
                           </div>
                         </td>
-                        <td style={{ padding: "12px 16px" }}>
+                        <td style={{ padding: "10px 10px" }}>
                           <code
                             style={{
                               backgroundColor: "#f1f5f9",
                               padding: "2px 6px",
                               borderRadius: "4px",
-                              fontSize: "0.8rem",
+                              fontSize: "0.78rem",
                               color: "#475569",
                             }}
                           >
                             {role.code}
                           </code>
                         </td>
-                        <td style={{ padding: "12px 16px", color: "#334155" }}>
+                        <td style={{ padding: "10px 10px", color: "#334155" }}>
                           {fieldMap.get(role.fieldId) ?? role.fieldId}
                         </td>
-                        <td style={{ padding: "12px 16px", color: "#334155" }}>
+                        <td style={{ padding: "10px 10px", color: "#334155" }}>
                           <strong>{role.slotsRequired}</strong> orang
                         </td>
-                        <td style={{ padding: "12px 16px" }}>
+                        <td style={{ padding: "10px 10px" }}>
                           {isOperatorOrKantoria ? (
                             <span
                               style={{
@@ -2151,7 +2151,7 @@ export function PelayananPanel({
                             </span>
                           )}
                         </td>
-                        <td style={{ padding: "12px 16px" }}>
+                        <td style={{ padding: "10px 10px" }}>
                           {role.active ? (
                             <span
                               style={{
@@ -2183,7 +2183,7 @@ export function PelayananPanel({
                         {canManage && (
                           <td
                             style={{
-                              padding: "12px 16px",
+                              padding: "10px 10px",
                               textAlign: "right",
                             }}
                           >
@@ -2199,13 +2199,13 @@ export function PelayananPanel({
                                 onClick={() => handleOpenEditRole(role)}
                                 title="Edit Peran"
                                 style={{
-                                  padding: "6px 10px",
+                                  padding: "5px 8px",
                                   borderRadius: "6px",
                                   border: "1px solid #cbd5e1",
                                   backgroundColor: "#ffffff",
                                   color: "#334155",
                                   cursor: "pointer",
-                                  fontSize: "0.8rem",
+                                  fontSize: "0.78rem",
                                   display: "inline-flex",
                                   alignItems: "center",
                                   gap: "4px",
@@ -2225,13 +2225,13 @@ export function PelayananPanel({
                                   }
                                   title="Nonaktifkan Peran"
                                   style={{
-                                    padding: "6px 10px",
+                                    padding: "5px 8px",
                                     borderRadius: "6px",
                                     border: "1px solid #fed7aa",
                                     backgroundColor: "#fff7ed",
                                     color: "#c2410c",
                                     cursor: "pointer",
-                                    fontSize: "0.8rem",
+                                    fontSize: "0.78rem",
                                     display: "inline-flex",
                                     alignItems: "center",
                                     gap: "4px",
@@ -2249,13 +2249,13 @@ export function PelayananPanel({
                                   }
                                   title="Aktifkan Peran"
                                   style={{
-                                    padding: "6px 10px",
+                                    padding: "5px 8px",
                                     borderRadius: "6px",
                                     border: "1px solid #bbf7d0",
                                     backgroundColor: "#f0fdf4",
                                     color: "#15803d",
                                     cursor: "pointer",
-                                    fontSize: "0.8rem",
+                                    fontSize: "0.78rem",
                                     display: "inline-flex",
                                     alignItems: "center",
                                     gap: "4px",
@@ -2273,13 +2273,13 @@ export function PelayananPanel({
                                 onClick={() => handleOpenDeleteRole(role)}
                                 title="Hapus Peran"
                                 style={{
-                                  padding: "6px 10px",
+                                  padding: "5px 8px",
                                   borderRadius: "6px",
                                   border: "1px solid #fecdd3",
                                   backgroundColor: "#fff1f2",
                                   color: "#be123c",
                                   cursor: "pointer",
-                                  fontSize: "0.8rem",
+                                  fontSize: "0.78rem",
                                   display: "inline-flex",
                                   alignItems: "center",
                                   gap: "4px",
@@ -2384,16 +2384,16 @@ export function PelayananPanel({
                       fontWeight: 600,
                     }}
                   >
-                    <th style={{ padding: "12px 16px" }}>Nama Bidang</th>
-                    <th style={{ padding: "12px 16px" }}>Kode Sistem</th>
-                    <th style={{ padding: "12px 16px" }}>
+                    <th style={{ padding: "10px 10px" }}>Nama Bidang</th>
+                    <th style={{ padding: "10px 10px" }}>Kode Sistem</th>
+                    <th style={{ padding: "10px 10px" }}>
                       Jumlah Peran Terkait
                     </th>
-                    <th style={{ padding: "12px 16px" }}>Status</th>
+                    <th style={{ padding: "10px 10px" }}>Status</th>
                     {canManage && (
                       <th
                         style={{
-                          padding: "12px 16px",
+                          padding: "10px 10px",
                           textAlign: "right",
                         }}
                       >
@@ -2412,25 +2412,25 @@ export function PelayananPanel({
                         key={f.id}
                         style={{ borderBottom: "1px solid #f1f5f9" }}
                       >
-                        <td style={{ padding: "12px 16px" }}>
+                        <td style={{ padding: "10px 10px" }}>
                           <strong style={{ color: "#0f172a" }}>{f.name}</strong>
                         </td>
-                        <td style={{ padding: "12px 16px" }}>
+                        <td style={{ padding: "10px 10px" }}>
                           <code
                             style={{
                               backgroundColor: "#f1f5f9",
                               padding: "2px 6px",
                               borderRadius: "4px",
-                              fontSize: "0.8rem",
+                              fontSize: "0.78rem",
                             }}
                           >
                             {f.code}
                           </code>
                         </td>
-                        <td style={{ padding: "12px 16px", color: "#334155" }}>
+                        <td style={{ padding: "10px 10px", color: "#334155" }}>
                           {roleCount} Peran Pelayanan
                         </td>
-                        <td style={{ padding: "12px 16px" }}>
+                        <td style={{ padding: "10px 10px" }}>
                           <span
                             style={{
                               padding: "3px 8px",
@@ -2447,7 +2447,7 @@ export function PelayananPanel({
                         {canManage && (
                           <td
                             style={{
-                              padding: "12px 16px",
+                              padding: "10px 10px",
                               textAlign: "right",
                             }}
                           >
@@ -2456,13 +2456,13 @@ export function PelayananPanel({
                               onClick={() => handleOpenDeleteField(f)}
                               title="Hapus Bidang"
                               style={{
-                                padding: "6px 10px",
+                                padding: "5px 8px",
                                 borderRadius: "6px",
                                 border: "1px solid #fecdd3",
                                 backgroundColor: "#fff1f2",
                                 color: "#be123c",
                                 cursor: "pointer",
-                                fontSize: "0.8rem",
+                                fontSize: "0.78rem",
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: "4px",
