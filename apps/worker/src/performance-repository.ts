@@ -601,7 +601,7 @@ export async function getOrganizationReport(
        LEFT JOIN assignments a ON a.organization_id = sr.organization_id AND a.service_role_id = sr.id
        WHERE sr.organization_id = ?
        GROUP BY sr.id, sr.code, sr.name
-       ORDER BY totalAssignments DESC, sr.name ASC`,
+       ORDER BY COUNT(a.id) DESC, sr.name ASC`,
     )
     .bind(orgId)
     .all<{ roleCode: string; roleName: string; totalAssignments: number }>();
@@ -734,7 +734,7 @@ export async function getServantPerformanceReport(
        JOIN service_roles sr ON sr.organization_id = a.organization_id AND sr.id = a.service_role_id
        WHERE a.organization_id = ? AND a.servant_id = ? AND a.status NOT IN ('cancelled', 'reassigned')
        GROUP BY sr.id, sr.code, sr.name
-       ORDER BY count DESC`,
+       ORDER BY COUNT(a.id) DESC`,
     )
     .bind(actor.organizationId, servantId)
     .all<{ roleCode: string; roleName: string; count: number }>();

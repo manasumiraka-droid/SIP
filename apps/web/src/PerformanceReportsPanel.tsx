@@ -689,7 +689,10 @@ export const PerformanceReportsPanel: React.FC<Props> = () => {
                   marginTop: "4px",
                 }}
               >
-                {(servantReport.confirmationRate * 100).toFixed(0)}%
+                {servantReport.confirmationRate <= 1
+                  ? (servantReport.confirmationRate * 100).toFixed(0)
+                  : servantReport.confirmationRate.toFixed(0)}
+                %
               </div>
               <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
                 {servantReport.acceptedAssignments} dari{" "}
@@ -722,7 +725,10 @@ export const PerformanceReportsPanel: React.FC<Props> = () => {
                   marginTop: "4px",
                 }}
               >
-                {(servantReport.attendanceRate * 100).toFixed(0)}%
+                {servantReport.attendanceRate <= 1
+                  ? (servantReport.attendanceRate * 100).toFixed(0)
+                  : servantReport.attendanceRate.toFixed(0)}
+                %
               </div>
               <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
                 Berdasarkan presensi ibadah
