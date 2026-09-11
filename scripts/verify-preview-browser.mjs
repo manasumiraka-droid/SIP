@@ -119,6 +119,18 @@ async function main() {
     fullPage: true,
   });
 
+  // 11. Pelayanan Menu (Jenis Peran Pelayanan tab)
+  console.log("Capturing 11. Pelayanan Menu (Jenis Peran Pelayanan)...");
+  const peranTabBtn = page.locator('button:has-text("Jenis Peran Pelayanan")');
+  if (await peranTabBtn.isVisible()) {
+    await peranTabBtn.click();
+    await page.waitForTimeout(1000);
+  }
+  await page.screenshot({
+    path: path.join(targetDir, "preview_pelayanan_peran.png"),
+    fullPage: true,
+  });
+
   // 12. Pengaturan Menu (Pengguna & Role tab)
   console.log("Capturing 12. Pengaturan Menu (Pengguna & Role)...");
   await page.click('nav a[href="#pengaturan"]');
