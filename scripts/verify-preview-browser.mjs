@@ -119,15 +119,24 @@ async function main() {
     fullPage: true,
   });
 
-  // 11. Pelayanan Menu (Jenis Peran tab)
-  console.log("Capturing 11. Pelayanan Menu (Jenis Peran)...");
-  const peranTabBtn = page.locator('button:has-text("Jenis Peran Pelayanan")');
-  if (await peranTabBtn.isVisible()) {
-    await peranTabBtn.click();
+  // 12. Pengaturan Menu (Pengguna & Role tab)
+  console.log("Capturing 12. Pengaturan Menu (Pengguna & Role)...");
+  await page.click('nav a[href="#pengaturan"]');
+  await page.waitForTimeout(1500);
+  await page.screenshot({
+    path: path.join(targetDir, "preview_pengaturan_users.png"),
+    fullPage: true,
+  });
+
+  // 13. Pengaturan Menu (Organisasi tab)
+  console.log("Capturing 13. Pengaturan Menu (Organisasi & Kebijakan)...");
+  const orgTabBtn = page.locator('button:has-text("Organisasi & Kebijakan")');
+  if (await orgTabBtn.isVisible()) {
+    await orgTabBtn.click();
     await page.waitForTimeout(1000);
   }
   await page.screenshot({
-    path: path.join(targetDir, "preview_pelayanan_peran.png"),
+    path: path.join(targetDir, "preview_pengaturan_org.png"),
     fullPage: true,
   });
 

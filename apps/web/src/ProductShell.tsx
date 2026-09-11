@@ -11,6 +11,7 @@ import {
   Menu,
   MoreHorizontal,
   Search,
+  Settings,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -24,6 +25,7 @@ import { AttendanceModal } from "./AttendanceModal";
 import { MyTasksPanel } from "./MyTasksPanel";
 import { ServiceDetailModal, type ServiceDetail } from "./ServiceDetailModal";
 import { PelayananPanel } from "./PelayananPanel";
+import { SettingsPanel } from "./SettingsPanel";
 
 export const PREVIEW_PERSONAS = [
   {
@@ -258,6 +260,8 @@ export function ProductShell({
     roles.includes("admin") ||
     canManageServants;
 
+  const canAccessSettings = roles.includes("super_admin") || canManageRoles;
+
   const currentNav = [
     [LayoutDashboard, "Beranda"],
     [CalendarDays, "Kalender"],
@@ -265,6 +269,7 @@ export function ProductShell({
     [AlertTriangle, "Insiden"],
     [BarChart3, "Laporan"],
     ...(canAccessPelayanan ? ([[Users, "Pelayanan"]] as const) : []),
+    ...(canAccessSettings ? ([[Settings, "Pengaturan"]] as const) : []),
     [MoreHorizontal, "Lainnya"],
   ] as const;
 
@@ -701,6 +706,11 @@ export function ProductShell({
           <PerformanceReportsPanel organizationId="" />
         ) : section === "Pelayanan" && canAccessPelayanan ? (
           <PelayananPanel canManage={canAccessPelayanan} />
+        ) : section === "Pengaturan" && canAccessSettings ? (
+          <SettingsPanel
+            timezone={timezone}
+            onAccessChanged={onAccessChanged}
+          />
         ) : section === "Lainnya" ? (
           <section className="section-preview">
             <p className="eyebrow">PENGELOLAAN</p>
