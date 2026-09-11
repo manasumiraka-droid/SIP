@@ -23,9 +23,15 @@ export function installAuthenticatedFetch() {
       url.origin === window.location.origin &&
       url.pathname.startsWith("/api/")
     ) {
-      const headers = new Headers(
-        input instanceof Request ? input.headers : init.headers,
-      );
+      if (input instanceof Request) {
+        // Build from the Request so its method/body/mode survive, then layer
+        // the caller's init over it with the auth header merged in.
+        const authored = new Request(input, init);
+        const headers = new Headers(authored.headers);
+        headers.set("Authorization", `Bearer ${key}`);
+        return nativeFetch(new Request(authored, { headers }));
+      }
+      const headers = new Headers(init.headers);
       headers.set("Authorization", `Bearer ${key}`);
       return nativeFetch(input, { ...init, headers });
     }

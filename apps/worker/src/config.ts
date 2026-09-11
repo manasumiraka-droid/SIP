@@ -10,7 +10,7 @@ const runtimeConfigSchema = z.union([
   base.extend({
     AUTH_MODE: z.literal("preview_key"),
     ENVIRONMENT: z.literal("preview"),
-    PREVIEW_AUTH_KEY: z.string().min(32),
+    PREVIEW_AUTH_KEY_HASH: z.string().regex(/^[a-f0-9]{64}$/),
     PREVIEW_AUTH_EMAIL: z.email(),
   }),
   base.extend({

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { ApplicationError } from "../../../packages/domain/src/errors";
 import type { AppEnvironment } from "./types";
-import { parseXlsx, suggestMapping, IMPORT_LIMITS } from "./xlsx-parser";
+import { parseXlsx, suggestMapping } from "./xlsx-parser";
 import {
   createImportBatch,
   validateImportBatch,
@@ -16,19 +16,13 @@ import {
 } from "./import-repository";
 import { z } from "zod";
 import { resourceIdSchema } from "../../../packages/validation/src/users";
+import {
+  IMPORT_FILE_SIZE_LABEL,
+  IMPORT_LIMITS,
+  importMappingSchema,
+} from "../../../packages/validation/src/imports";
 import { limitMutation, readMutation } from "./mutation-request";
-const mapping = z
-  .record(z.string(), z.string().max(200).nullable())
-  .refine((v) =>
-    [
-      "Nomor",
-      "tanggal",
-      "Tempat Kebaktian/Ibadah",
-      "Pelayan Firman",
-      "MC",
-      "Pelayan Persembahan",
-    ].every((k) => k in v),
-  );
+const mapping = importMappingSchema;
 const validate = z
   .object({ mapping, dateFormat: z.enum(["dmy", "mdy"]) })
   .strict();
@@ -61,7 +55,7 @@ export function importRoutes() {
       throw new ApplicationError(
         "VALIDATION_FAILED",
         422,
-        "Pilih file XLSX maksimum 5 MB.",
+        `Pilih file XLSX maksimum ${IMPORT_FILE_SIZE_LABEL}.`,
       );
     await limitMutation(c);
     const bytes = new Uint8Array(await file.arrayBuffer());

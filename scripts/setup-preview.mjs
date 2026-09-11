@@ -327,11 +327,13 @@ const repository = runGh([
 ]);
 runGh(["api", `repos/${repository}/environments/preview`, "-X", "PUT"]);
 const previewAuthKey = randomBytes(32).toString("base64url");
+const previewAuthKeyHash = createHash("sha256")
+  .update(previewAuthKey)
+  .digest("hex");
 const secrets = {
   CLOUDFLARE_API_TOKEN: input.cloudflareToken,
   CLOUDFLARE_ACCOUNT_ID: accountId,
   SUPABASE_DATABASE_URL: input.databaseUrl,
-  SPI_PREVIEW_AUTH_KEY: previewAuthKey,
   SPI_HYPERDRIVE_ID: hyperdrive.id,
   SPI_PRODUCTION_HYPERDRIVE_ID: "production-not-configured",
   SPI_AUTH_RATE_LIMIT_NAMESPACE_ID: defaults.authNamespace,
@@ -347,6 +349,7 @@ const variables = {
   SPI_DEPLOY_TARGET: deployTarget,
   SPI_AUTH_MODE: "preview_key",
   SPI_PREVIEW_AUTH_EMAIL: adminEmail,
+  SPI_PREVIEW_AUTH_KEY_HASH: previewAuthKeyHash,
   SPI_ORGANIZATION_ID: defaults.organizationId,
   SPI_TELEGRAM_WEBHOOK_URL: `${app.origin}/telegram/webhook`,
   SPI_TELEGRAM_DELIVERY_ENABLED: "false",

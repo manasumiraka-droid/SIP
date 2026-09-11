@@ -629,7 +629,7 @@ Setiap tiket AI mengikuti alur berikut:
 6. **Review silang:** risiko tinggi/kritis wajib direview Astra dan manusia; risiko sedang minimal Sol/Terra yang bukan penulis utama.
 7. **Catat keputusan:** perubahan arsitektur, keamanan, permission, atau aturan bisnis masuk ADR/audit dokumentasi.
 
-### 18.10 Pekerjaan yang tidak boleh diputuskan AI sendiri (berlaku hanya saat aplikasi sudah pada tahap test run)
+### 18.10 Pekerjaan yang tidak boleh diputuskan AI sendiri (BERLAKU HANYA SAAT APLIKASI SUDAH PUSH, COMMIT)
 
 - Menyetujui kelayakan Pelayan Firman atau keputusan gerejawi.
 - Memberi akses produksi, mengubah role pengguna nyata, atau membuka secret.

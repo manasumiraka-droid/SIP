@@ -5,7 +5,7 @@ export type AppEnvironment = {
     AUTH_MODE?: "cloudflare_access" | "preview_key";
     ACCESS_ISSUER?: string;
     ACCESS_AUDIENCE?: string;
-    PREVIEW_AUTH_KEY?: string;
+    PREVIEW_AUTH_KEY_HASH?: string;
     PREVIEW_AUTH_EMAIL?: string;
     ORGANIZATION_ID: string;
     APP_ORIGIN: string;

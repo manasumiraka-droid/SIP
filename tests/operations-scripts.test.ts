@@ -114,6 +114,7 @@ describe("operations scripts fail safely", () => {
           SPI_APP_ORIGIN: "https://preview.example.invalid",
           SPI_AUTH_MODE: "preview_key",
           SPI_PREVIEW_AUTH_EMAIL: "admin@example.invalid",
+          SPI_PREVIEW_AUTH_KEY_HASH: "a".repeat(64),
           SPI_ORGANIZATION_ID: "org-preview",
           SPI_WORKER_ROUTE: "preview.example.invalid/api/*",
           SPI_TELEGRAM_WEBHOOK_ROUTE:
@@ -156,6 +157,7 @@ describe("operations scripts fail safely", () => {
           SPI_APP_ORIGIN: "https://spi-api-preview.example.workers.dev",
           SPI_AUTH_MODE: "preview_key",
           SPI_PREVIEW_AUTH_EMAIL: "admin@example.invalid",
+          SPI_PREVIEW_AUTH_KEY_HASH: "a".repeat(64),
           SPI_ORGANIZATION_ID: "org-preview",
           SPI_WORKER_ROUTE: "",
           SPI_TELEGRAM_WEBHOOK_ROUTE: "",
@@ -187,6 +189,7 @@ describe("operations scripts fail safely", () => {
           SPI_APP_ORIGIN: "https://preview.example.invalid",
           SPI_AUTH_MODE: "preview_key",
           SPI_PREVIEW_AUTH_EMAIL: "admin@example.invalid",
+          SPI_PREVIEW_AUTH_KEY_HASH: "a".repeat(64),
           SPI_ORGANIZATION_ID: "org-preview",
           SPI_WORKER_ROUTE: "preview.example.invalid/api/*",
           SPI_TELEGRAM_WEBHOOK_ROUTE:
@@ -213,6 +216,7 @@ describe("operations scripts fail safely", () => {
           SPI_APP_ORIGIN: "https://preview.example.invalid",
           SPI_AUTH_MODE: "preview_key",
           SPI_PREVIEW_AUTH_EMAIL: "admin@example.invalid",
+          SPI_PREVIEW_AUTH_KEY_HASH: "a".repeat(64),
           SPI_ORGANIZATION_ID: "org-preview",
           SPI_WORKER_ROUTE: "preview.example.invalid/api/*",
           SPI_TELEGRAM_WEBHOOK_ROUTE:
@@ -236,6 +240,7 @@ describe("operations scripts fail safely", () => {
           SPI_APP_ORIGIN: "https://preview.example.invalid",
           SPI_AUTH_MODE: "preview_key",
           SPI_PREVIEW_AUTH_EMAIL: "admin@example.invalid",
+          SPI_PREVIEW_AUTH_KEY_HASH: "a".repeat(64),
           SPI_ORGANIZATION_ID: "org-preview",
           SPI_WORKER_ROUTE: "preview.example.invalid/api/*",
           SPI_TELEGRAM_WEBHOOK_ROUTE:
@@ -317,5 +322,73 @@ describe("operations scripts fail safely", () => {
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("sekurangnya lima tahun");
     expect(result.stderr).not.toContain(common.CLOUDFLARE_API_TOKEN);
+  });
+  it("certifies a complete, isolated preview environment without leaking values", () => {
+    const result = spawnSync(
+      process.execPath,
+      ["scripts/preflight-preview.mjs", "--with-telegram"],
+      {
+        encoding: "utf8",
+        env: {
+          ...common,
+          ...telegram,
+          SPI_OTHER_HYPERDRIVE_ID: "hyperdrive-production",
+          SPI_APP_ORIGIN: "https://preview.example.invalid",
+          SPI_AUTH_MODE: "preview_key",
+          SPI_PREVIEW_AUTH_EMAIL: "admin@example.invalid",
+          SPI_PREVIEW_AUTH_KEY_HASH: "a".repeat(64),
+          SPI_ORGANIZATION_ID: "org-preview",
+          SPI_WORKER_ROUTE: "preview.example.invalid/api/*",
+          SPI_TELEGRAM_WEBHOOK_ROUTE:
+            "preview.example.invalid/telegram/webhook",
+          SPI_ZONE_NAME: "example.invalid",
+          SPI_PAGES_PROJECT: "spi-preview",
+          SPI_TELEGRAM_WEBHOOK_URL:
+            "https://preview.example.invalid/telegram/webhook",
+          SPI_TELEGRAM_DELIVERY_ENABLED: "false",
+        },
+      },
+    );
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Preflight preview lulus");
+    const output = `${result.stdout}${result.stderr}`;
+    for (const value of [
+      common.CLOUDFLARE_API_TOKEN,
+      common.SUPABASE_DATABASE_URL,
+      telegram.TELEGRAM_BOT_TOKEN,
+      telegram.TELEGRAM_WEBHOOK_SECRET,
+    ])
+      expect(output).not.toContain(value);
+  });
+  it("rejects an incomplete preview environment before any deployment", () => {
+    const result = spawnSync(
+      process.execPath,
+      ["scripts/preflight-preview.mjs"],
+      {
+        encoding: "utf8",
+        env: {
+          ...common,
+          SPI_OTHER_HYPERDRIVE_ID: "hyperdrive-production",
+          SPI_APP_ORIGIN: "https://preview.example.invalid",
+          SPI_AUTH_MODE: "preview_key",
+          SPI_PREVIEW_AUTH_EMAIL: "admin@example.invalid",
+          SPI_PREVIEW_AUTH_KEY_HASH: "a".repeat(64),
+          SPI_ORGANIZATION_ID: "org-preview",
+          SPI_WORKER_ROUTE: "preview.example.invalid/api/*",
+          SPI_TELEGRAM_WEBHOOK_ROUTE:
+            "preview.example.invalid/telegram/webhook",
+          SPI_ZONE_NAME: "example.invalid",
+          SPI_PAGES_PROJECT: "spi-preview",
+          SPI_TELEGRAM_WEBHOOK_URL:
+            "https://preview.example.invalid/telegram/webhook",
+          SPI_TELEGRAM_DELIVERY_ENABLED: "true",
+        },
+      },
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("wajib bernilai false");
+    expect(`${result.stdout}${result.stderr}`).not.toContain(
+      common.CLOUDFLARE_API_TOKEN,
+    );
   });
 });

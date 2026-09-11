@@ -4,7 +4,7 @@ export type AuthConfig = {
   AUTH_MODE?: "cloudflare_access" | "preview_key";
   ACCESS_ISSUER?: string;
   ACCESS_AUDIENCE?: string;
-  PREVIEW_AUTH_KEY?: string;
+  PREVIEW_AUTH_KEY_HASH?: string;
   PREVIEW_AUTH_EMAIL?: string;
   ENVIRONMENT?: string;
   APP_ORIGIN?: string;
@@ -15,14 +15,16 @@ const configSchema = z.object({
   ACCESS_AUDIENCE: z.string().min(1),
 });
 
-async function matchesSecret(candidate: string, expected: string) {
+async function matchesSecret(candidate: string, expectedHash: string) {
   const encoder = new TextEncoder();
-  const [candidateHash, expectedHash] = await Promise.all([
-    crypto.subtle.digest("SHA-256", encoder.encode(candidate)),
-    crypto.subtle.digest("SHA-256", encoder.encode(expected)),
-  ]);
+  const candidateHash = await crypto.subtle.digest(
+    "SHA-256",
+    encoder.encode(candidate),
+  );
   const left = new Uint8Array(candidateHash);
-  const right = new Uint8Array(expectedHash);
+  const right = Uint8Array.from(expectedHash.match(/.{2}/g) ?? [], (byte) =>
+    Number.parseInt(byte, 16),
+  );
   let difference = left.length ^ right.length;
   for (let index = 0; index < left.length; index += 1)
     difference |= (left[index] ?? 0) ^ (right[index] ?? 0);
@@ -51,7 +53,10 @@ export async function verifyConfiguredAccess(
   )
     return z.email().parse(config.LOCAL_DEVELOPMENT_EMAIL).toLowerCase();
   if (config.ENVIRONMENT === "preview" && config.AUTH_MODE === "preview_key") {
-    const expected = z.string().min(32).parse(config.PREVIEW_AUTH_KEY);
+    const expected = z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .parse(config.PREVIEW_AUTH_KEY_HASH);
     const email = z.email().parse(config.PREVIEW_AUTH_EMAIL).toLowerCase();
     if (!(await matchesSecret(token, expected))) throw new Error("Invalid key");
     return email;

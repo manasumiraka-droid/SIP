@@ -26,6 +26,7 @@
     "security:secrets": "node scripts/scan-secrets.mjs",
     "config:preview": "node scripts/generate-worker-config.mjs preview",
     "config:production": "node scripts/generate-worker-config.mjs production",
+    "preflight:preview": "node scripts/preflight-preview.mjs",
     "bootstrap:preview": "node scripts/bootstrap-supabase.mjs preview",
     "bootstrap:production": "node scripts/bootstrap-supabase.mjs production",
     "telegram:secrets:preview": "node scripts/configure-telegram-cloud.mjs preview",

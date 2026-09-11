@@ -41,6 +41,36 @@ const defaults: Dependencies = {
     }).run();
   },
 };
+/**
+ * Derives a per-caller rate-limit key so one client, route, or token cannot
+ * exhaust the shared authentication bucket for everyone else. The token is
+ * hashed rather than used verbatim so no credential is retained in limiter
+ * state, and absent inputs fall back to per-call randomness instead of a
+ * single shared "unknown" bucket.
+ */
+async function authLimitKey(request: Request) {
+  const ip = request.headers.get("CF-Connecting-IP");
+  const ipPart = ip ?? `ip-${crypto.randomUUID()}`;
+  const route = operationName(request.method, new URL(request.url).pathname);
+  const authorization = request.headers
+    .get("Authorization")
+    ?.match(/^Bearer (.+)$/i)?.[1];
+  const token = authorization ?? request.headers.get("Cf-Access-Jwt-Assertion");
+  const tokenPart = token
+    ? Array.from(
+        new Uint8Array(
+          await crypto.subtle.digest(
+            "SHA-256",
+            new TextEncoder().encode(token),
+          ),
+        ),
+        (byte) => byte.toString(16).padStart(2, "0"),
+      )
+        .join("")
+        .slice(0, 16)
+    : "anon";
+  return `${ipPart}|${route}|${tokenPart}`;
+}
 export function createApp(dependencies: Dependencies = defaults) {
   const app = new Hono<AppEnvironment>();
   app.use("*", secureHeaders());
@@ -62,7 +92,7 @@ export function createApp(dependencies: Dependencies = defaults) {
     if (!c.env.AUTH_LIMITER)
       throw new Error("Authentication rate limiter not configured");
     const authLimit = await c.env.AUTH_LIMITER.limit({
-      key: c.req.header("CF-Connecting-IP") ?? "unknown",
+      key: await authLimitKey(c.req.raw),
     });
     if (!authLimit.success) {
       c.header("Retry-After", "60");

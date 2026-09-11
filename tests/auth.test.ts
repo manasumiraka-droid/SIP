@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { expect, it } from "vitest";
 import {
@@ -24,22 +25,22 @@ it("allows the fixed development assertion only for the explicit localhost envir
   ).rejects.toThrow();
 });
 it("allows a strong preview key only in the preview key mode", async () => {
+  const previewKey = "synthetic-preview-key-that-is-long-enough";
   const config = {
     AUTH_MODE: "preview_key" as const,
     ENVIRONMENT: "preview",
     APP_ORIGIN: "https://preview.example.invalid",
-    PREVIEW_AUTH_KEY: "synthetic-preview-key-that-is-long-enough",
+    PREVIEW_AUTH_KEY_HASH: createHash("sha256")
+      .update(previewKey)
+      .digest("hex"),
     PREVIEW_AUTH_EMAIL: "ADMIN@example.invalid",
   };
-  expect(
-    await verifyConfiguredAccess(
-      "synthetic-preview-key-that-is-long-enough",
-      config,
-    ),
-  ).toBe("admin@example.invalid");
+  expect(await verifyConfiguredAccess(previewKey, config)).toBe(
+    "admin@example.invalid",
+  );
   await expect(verifyConfiguredAccess("wrong-key", config)).rejects.toThrow();
   await expect(
-    verifyConfiguredAccess("synthetic-preview-key-that-is-long-enough", {
+    verifyConfiguredAccess(previewKey, {
       ...config,
       ENVIRONMENT: "production",
     }),

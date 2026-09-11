@@ -25,6 +25,35 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Require complete preview environment
+        run: npm run preflight:preview
+        env:
+          SPI_PREFLIGHT_TELEGRAM: ${{ inputs.configure_telegram }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+          SPI_HYPERDRIVE_ID: ${{ secrets.SPI_HYPERDRIVE_ID }}
+          SPI_OTHER_HYPERDRIVE_ID: ${{ secrets.SPI_PRODUCTION_HYPERDRIVE_ID }}
+          SPI_AUTH_RATE_LIMIT_NAMESPACE_ID: ${{ secrets.SPI_AUTH_RATE_LIMIT_NAMESPACE_ID }}
+          SPI_MUTATION_RATE_LIMIT_NAMESPACE_ID: ${{ secrets.SPI_MUTATION_RATE_LIMIT_NAMESPACE_ID }}
+          SPI_OTHER_AUTH_RATE_LIMIT_NAMESPACE_ID: ${{ secrets.SPI_PRODUCTION_AUTH_RATE_LIMIT_NAMESPACE_ID }}
+          SPI_OTHER_MUTATION_RATE_LIMIT_NAMESPACE_ID: ${{ secrets.SPI_PRODUCTION_MUTATION_RATE_LIMIT_NAMESPACE_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+          SPI_APP_ORIGIN: ${{ vars.SPI_APP_ORIGIN }}
+          SPI_DEPLOY_TARGET: ${{ vars.SPI_DEPLOY_TARGET }}
+          SPI_AUTH_MODE: ${{ vars.SPI_AUTH_MODE }}
+          SPI_PREVIEW_AUTH_EMAIL: ${{ vars.SPI_PREVIEW_AUTH_EMAIL }}
+          SPI_PREVIEW_AUTH_KEY_HASH: ${{ vars.SPI_PREVIEW_AUTH_KEY_HASH }}
+          SPI_ACCESS_ISSUER: ${{ vars.SPI_ACCESS_ISSUER }}
+          SPI_ACCESS_AUDIENCE: ${{ vars.SPI_ACCESS_AUDIENCE }}
+          SPI_ORGANIZATION_ID: ${{ vars.SPI_ORGANIZATION_ID }}
+          SPI_WORKER_ROUTE: ${{ vars.SPI_WORKER_ROUTE }}
+          SPI_TELEGRAM_WEBHOOK_ROUTE: ${{ vars.SPI_TELEGRAM_WEBHOOK_ROUTE }}
+          SPI_ZONE_NAME: ${{ vars.SPI_ZONE_NAME }}
+          SPI_PAGES_PROJECT: ${{ vars.SPI_PAGES_PROJECT }}
+          SPI_TELEGRAM_WEBHOOK_URL: ${{ vars.SPI_TELEGRAM_WEBHOOK_URL }}
+          SPI_TELEGRAM_DELIVERY_ENABLED: ${{ vars.SPI_TELEGRAM_DELIVERY_ENABLED }}
       - run: npm run check
       - run: npm run security:secrets
       - name: Require explicit preview migration approval
@@ -40,6 +69,7 @@ jobs:
           SPI_DEPLOY_TARGET: ${{ vars.SPI_DEPLOY_TARGET }}
           SPI_AUTH_MODE: ${{ vars.SPI_AUTH_MODE }}
           SPI_PREVIEW_AUTH_EMAIL: ${{ vars.SPI_PREVIEW_AUTH_EMAIL }}
+          SPI_PREVIEW_AUTH_KEY_HASH: ${{ vars.SPI_PREVIEW_AUTH_KEY_HASH }}
           SPI_ORGANIZATION_ID: ${{ vars.SPI_ORGANIZATION_ID }}
           SPI_WORKER_ROUTE: ${{ vars.SPI_WORKER_ROUTE }}
           SPI_TELEGRAM_WEBHOOK_ROUTE: ${{ vars.SPI_TELEGRAM_WEBHOOK_ROUTE }}
@@ -58,12 +88,6 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - name: Configure preview authentication secret
-        run: node scripts/configure-preview-auth.mjs --apply
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          SPI_PREVIEW_AUTH_KEY: ${{ secrets.SPI_PREVIEW_AUTH_KEY }}
       - name: Configure Telegram Worker secrets
         if: inputs.configure_telegram == true
         run: node scripts/configure-telegram-cloud.mjs preview --apply

@@ -1,23 +1,13 @@
 import readXlsxFile from "read-excel-file/universal";
 import { ApplicationError } from "../../../packages/domain/src/errors";
+import {
+  IMPORT_FILE_SIZE_LABEL,
+  IMPORT_LIMITS,
+  importColumns,
+} from "../../../packages/validation/src/imports";
 
-export const IMPORT_LIMITS = {
-  bytes: 5 * 1024 * 1024,
-  rows: 5000,
-  sheets: 16,
-  columns: 64,
-  cellChars: 2000,
-  zipEntries: 2000,
-  uncompressedBytes: 20 * 1024 * 1024,
-} as const;
-const required = [
-  "Nomor",
-  "tanggal",
-  "Tempat Kebaktian/Ibadah",
-  "Pelayan Firman",
-  "MC",
-  "Pelayan Persembahan",
-] as const;
+export { IMPORT_LIMITS };
+const required = importColumns;
 export type ParsedSheet = {
   sheets: string[];
   sheetName: string;
@@ -98,7 +88,7 @@ export async function parseXlsx(
   selectedSheet?: string,
 ): Promise<ParsedSheet> {
   if (bytes.byteLength > IMPORT_LIMITS.bytes)
-    fail("Ukuran file maksimum 5 MB.");
+    fail(`Ukuran file maksimum ${IMPORT_FILE_SIZE_LABEL}.`);
   entries(bytes);
   const sheets = await (() => {
     try {

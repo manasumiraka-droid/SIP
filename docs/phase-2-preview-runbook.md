@@ -29,6 +29,21 @@ Variables yang diperlukan:
 
 Lindungi Environment `preview` dengan required reviewer. Jangan memakai kredensial Cloudflare production.
 
+`SPI_AUTH_MODE` bernilai `preview_key` pada jalur otomatis `npm run setup:preview --apply`: UI dan API memakai kunci acak sekali pakai tanpa Cloudflare Zero Trust, dengan `SPI_PREVIEW_AUTH_EMAIL` sebagai identitas yang dipetakan dan `SPI_PREVIEW_AUTH_KEY_HASH` sebagai hash kunci. `SPI_AUTH_MODE=cloudflare_access` hanya dipakai bila preview permanen memakai Access; saat itu `SPI_ACCESS_ISSUER` dan `SPI_ACCESS_AUDIENCE` wajib diisi. `SPI_DEPLOY_TARGET` bernilai `zone` bila akun memiliki zone aktif, atau `workers_dev` bila setup memakai domain gratis `workers.dev`.
+
+## Pemeriksaan awal (preflight)
+
+Workflow **Deploy preview** menjalankan `npm run preflight:preview` sebelum quality gate dan migrasi. Pemeriksaan ini memastikan seluruh secret/variabel wajib sudah terisi, formatnya benar, dan preview tetap terisolasi dari production (Hyperdrive, namespace rate limit, serta `SPI_TELEGRAM_DELIVERY_ENABLED=false`). Pemeriksaan berhenti lebih awal dengan daftar masalah dan tidak pernah mencetak nilai rahasia.
+
+Operator dapat menjalankan pemeriksaan yang sama lebih dulu dari lokal dengan variabel environment yang sama:
+
+```powershell
+npm run preflight:preview
+npm run preflight:preview --with-telegram
+```
+
+Gunakan varian `--with-telegram` bila `configure_telegram=true`, agar `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_WEBHOOK_SECRET` ikut diperiksa keberadaannya.
+
 ## Jalankan dan verifikasi
 
 1. Operator menjalankan workflow **Deploy preview** secara manual dan menyetujui migrasi hanya untuk database preview.

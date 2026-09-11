@@ -16,6 +16,10 @@ const values = z
     deployTarget: z.enum(["zone", "workers_dev"]),
     authMode: z.enum(["cloudflare_access", "preview_key"]),
     previewAuthEmail: optional(z.email()),
+    previewAuthKeyHash: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
     issuer: optional(
       z.url().regex(/^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com$/),
     ),
@@ -39,6 +43,7 @@ const values = z
     deployTarget: process.env.SPI_DEPLOY_TARGET,
     authMode: process.env.SPI_AUTH_MODE,
     previewAuthEmail: process.env.SPI_PREVIEW_AUTH_EMAIL,
+    previewAuthKeyHash: process.env.SPI_PREVIEW_AUTH_KEY_HASH,
     issuer: process.env.SPI_ACCESS_ISSUER,
     audience: process.env.SPI_ACCESS_AUDIENCE,
     organizationId: process.env.SPI_ORGANIZATION_ID,
@@ -61,8 +66,11 @@ if (
   (!values.issuer || !values.audience)
 )
   throw new Error("Issuer dan audience Cloudflare Access wajib diisi.");
-if (values.authMode === "preview_key" && !values.previewAuthEmail)
-  throw new Error("Email autentikasi preview wajib diisi.");
+if (
+  values.authMode === "preview_key" &&
+  (!values.previewAuthEmail || !values.previewAuthKeyHash)
+)
+  throw new Error("Email dan hash autentikasi preview wajib diisi.");
 if (environment === "preview" && values.telegramDeliveryEnabled !== "false")
   throw new Error("Pengiriman Telegram nyata wajib nonaktif di preview.");
 if (values.hyperdriveId === values.otherHyperdriveId)
@@ -127,7 +135,10 @@ await writeFile(
               ACCESS_ISSUER: values.issuer,
               ACCESS_AUDIENCE: values.audience,
             }
-          : { PREVIEW_AUTH_EMAIL: values.previewAuthEmail }),
+          : {
+              PREVIEW_AUTH_EMAIL: values.previewAuthEmail,
+              PREVIEW_AUTH_KEY_HASH: values.previewAuthKeyHash,
+            }),
         ORGANIZATION_ID: values.organizationId,
         TELEGRAM_DELIVERY_ENABLED: values.telegramDeliveryEnabled,
       },

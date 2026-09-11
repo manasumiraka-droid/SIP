@@ -66,7 +66,7 @@ describe("identity API", () => {
       {
         AUTH_MODE: "preview_key",
         ENVIRONMENT: "preview",
-        PREVIEW_AUTH_KEY: "synthetic-preview-key-that-is-long-enough",
+        PREVIEW_AUTH_KEY_HASH: "a".repeat(64),
         PREVIEW_AUTH_EMAIL: "admin@example.invalid",
       },
     );

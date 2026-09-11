@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { Actor } from "../../../packages/domain/src/access";
 import { ApplicationError } from "../../../packages/domain/src/errors";
 import {
@@ -9,6 +10,21 @@ import {
 import type { ParsedSheet } from "./xlsx-parser";
 const now = () => new Date().toISOString();
 const json = (value: unknown) => JSON.stringify(value);
+/**
+ * Parses a JSON column without trusting its shape: invalid JSON or a failed
+ * schema match yields the provided fallback instead of throwing or leaking an
+ * inconsistent value to the client.
+ */
+function safeParseJson<T>(value: string, schema: z.ZodType<T>, fallback: T): T {
+  try {
+    const parsed = schema.safeParse(JSON.parse(value));
+    return parsed.success ? parsed.data : fallback;
+  } catch {
+    return fallback;
+  }
+}
+const codeListSchema = z.array(z.string());
+const normalizedRecordSchema = z.record(z.string(), z.unknown());
 function payloadChunks<T>(values: T[]) {
   const chunks: T[][] = [];
   let current: T[] = [],
@@ -39,6 +55,12 @@ const digest = async (value: unknown) =>
     ),
     (b) => b.toString(16).padStart(2, "0"),
   ).join("");
+/**
+ * SQL expression producing a random UUID (v4-shaped) inline, so INSERT ...
+ * SELECT statements can mint an id per row without a client round-trip.
+ */
+const uuidSqlExpression =
+  "lower(hex(randomblob(4))||'-'||hex(randomblob(2))||'-'||hex(randomblob(2))||'-'||hex(randomblob(2))||'-'||hex(randomblob(6)))";
 const allowed = (actor: Actor) =>
   actor.roles.includes("admin") || actor.roles.includes("super_admin");
 type ImportNormalized = ReturnType<typeof normalizeRow> & {
@@ -329,19 +351,72 @@ export async function validateImportBatch(
       409,
       "Batch impor tidak dapat divalidasi.",
     );
+  const {
+    records,
+    roles,
+    servants,
+    capabilities,
+    services,
+    linkedByRow,
+    pendingByRow,
+  } = await loadValidationContext(db, actor.organizationId, id);
+  const staged = stageRows(records, mapping, dateFormat, {
+    roles,
+    servants,
+    capabilities,
+    linkedByRow,
+    pendingByRow,
+  });
+  const status = await detectDuplicates(
+    db,
+    actor.organizationId,
+    staged,
+    services,
+  );
+  const updateChunks = payloadChunks(
+    staged.map((row) => ({
+      id: row.id,
+      normalized: row.value,
+      status: row.status,
+      action: row.action,
+      duplicateServiceId: row.duplicateServiceId ?? null,
+      errors: row.value.errors,
+      warnings: row.value.warnings,
+      warningsAcknowledgedAt:
+        row.warningsAcknowledged &&
+        row.priorWarnings === json(row.value.warnings)
+          ? row.warningsAcknowledgedAt
+          : null,
+    })),
+  );
+  await persistValidation(
+    db,
+    actor,
+    id,
+    mapping,
+    dateFormat,
+    status,
+    updateChunks,
+    requestId,
+  );
+  return { id, status };
+}
+
+/**
+ * Loads every record needed to validate a batch: staged rows, active roles and
+ * servants, capability pairs, existing services, and servant resolutions.
+ */
+async function loadValidationContext(
+  db: D1Database,
+  organizationId: string,
+  id: string,
+) {
   const records = await db
     .prepare(
       "SELECT id,raw_json,override_starts_at,warnings_acknowledged_at,warning_codes_json,proposed_action FROM import_rows WHERE organization_id=? AND batch_id=? AND status<>'excluded' ORDER BY row_number LIMIT 5001",
     )
-    .bind(actor.organizationId, id)
-    .all<{
-      id: string;
-      raw_json: string;
-      override_starts_at: string | null;
-      warnings_acknowledged_at: string | null;
-      warning_codes_json: string;
-      proposed_action: string;
-    }>();
+    .bind(organizationId, id)
+    .all<RowRecord>();
   if (records.results.length === 0)
     throw new ApplicationError(
       "VALIDATION_FAILED",
@@ -354,36 +429,31 @@ export async function validateImportBatch(
         .prepare(
           "SELECT id,name FROM service_roles WHERE organization_id=? AND active=1 ORDER BY id LIMIT 100",
         )
-        .bind(actor.organizationId)
+        .bind(organizationId)
         .all<RoleRecord>(),
       db
         .prepare(
           "SELECT id,display_name FROM servants WHERE organization_id=? AND status='active' ORDER BY id LIMIT 5001",
         )
-        .bind(actor.organizationId)
+        .bind(organizationId)
         .all<ServantRecord>(),
       db
         .prepare(
           "SELECT import_row_id,field_name,resolution_type,target_entity_id FROM import_resolutions WHERE organization_id=? AND import_row_id IN (SELECT id FROM import_rows WHERE organization_id=? AND batch_id=?) AND resolution_type IN ('link_existing','create_pending_review') LIMIT 10001",
         )
-        .bind(actor.organizationId, actor.organizationId, id)
-        .all<{
-          import_row_id: string;
-          field_name: string;
-          resolution_type: string;
-          target_entity_id: string;
-        }>(),
+        .bind(organizationId, organizationId, id)
+        .all<ResolutionRecord>(),
       db
         .prepare(
           "SELECT servant_id,service_role_id FROM servant_capabilities WHERE organization_id=? AND status='active' LIMIT 20001",
         )
-        .bind(actor.organizationId)
+        .bind(organizationId)
         .all<{ servant_id: string; service_role_id: string }>(),
       db
         .prepare(
           "SELECT id,starts_at,lower(trim(location)) location_normalized FROM worship_services WHERE organization_id=? AND status<>'cancelled' ORDER BY starts_at,id LIMIT 10001",
         )
-        .bind(actor.organizationId)
+        .bind(organizationId)
         .all<{ id: string; starts_at: string; location_normalized: string }>(),
     ]);
   if (servantRows.results.length > 5000)
@@ -398,18 +468,53 @@ export async function validateImportBatch(
       409,
       "Rentang jadwal terlalu besar untuk validasi impor ini.",
     );
-  const at = now();
-  const capabilities = new Set(
-    capabilityRows.results.map(
-      (row) => `${row.servant_id}:${row.service_role_id}`,
+  return {
+    records: records.results,
+    roles: roleRows.results,
+    servants: servantRows.results,
+    capabilities: new Set(
+      capabilityRows.results.map(
+        (row) => `${row.servant_id}:${row.service_role_id}`,
+      ),
     ),
-  );
-  const services = new Map(
-    serviceRows.results.map((service) => [
-      `${service.starts_at}\u0000${service.location_normalized}`,
-      service.id,
-    ]),
-  );
+    services: new Map(
+      serviceRows.results.map((service) => [
+        `${service.starts_at}\u0000${service.location_normalized}`,
+        service.id,
+      ]),
+    ),
+    ...indexResolutions(resolutionRows.results),
+  };
+}
+
+/** One row of an import batch, enriched with match results and duplicate state. */
+type StagedRow = {
+  id: string;
+  value: ImportNormalized;
+  action: string;
+  warningsAcknowledged: boolean;
+  warningsAcknowledgedAt: string | null;
+  priorWarnings: string;
+  status: string;
+  duplicateServiceId?: string;
+};
+type RowRecord = {
+  id: string;
+  raw_json: string;
+  override_starts_at: string | null;
+  warnings_acknowledged_at: string | null;
+  warning_codes_json: string;
+  proposed_action: string;
+};
+type ResolutionRecord = {
+  import_row_id: string;
+  field_name: string;
+  resolution_type: string;
+  target_entity_id: string;
+};
+
+/** Groups linked/pending servant resolutions by import row for match checking. */
+function indexResolutions(resolutions: ResolutionRecord[]) {
   const linkedByRow = new Map<
     string,
     Partial<Record<"preacher" | "mc", string>>
@@ -418,23 +523,38 @@ export async function validateImportBatch(
     string,
     Partial<Record<"preacher" | "mc", string>>
   >();
-  for (const resolution of resolutionRows.results)
+  for (const resolution of resolutions)
     if (
       (resolution.field_name === "preacher" ||
         resolution.field_name === "mc") &&
       resolution.target_entity_id
-    )
-      (resolution.resolution_type === "link_existing"
-        ? linkedByRow
-        : pendingByRow
-      ).set(resolution.import_row_id, {
-        ...((resolution.resolution_type === "link_existing"
+    ) {
+      const target =
+        resolution.resolution_type === "link_existing"
           ? linkedByRow
-          : pendingByRow
-        ).get(resolution.import_row_id) ?? {}),
+          : pendingByRow;
+      target.set(resolution.import_row_id, {
+        ...(target.get(resolution.import_row_id) ?? {}),
         [resolution.field_name]: resolution.target_entity_id,
       });
-  const staged = records.results.map((row) => {
+    }
+  return { linkedByRow, pendingByRow };
+}
+
+/** Applies date overrides and servant matching to produce stageable rows. */
+function stageRows(
+  records: RowRecord[],
+  mapping: ImportMapping,
+  dateFormat: ImportDateFormat,
+  context: {
+    roles: RoleRecord[];
+    servants: ServantRecord[];
+    capabilities: Set<string>;
+    linkedByRow: Map<string, Partial<Record<"preacher" | "mc", string>>>;
+    pendingByRow: Map<string, Partial<Record<"preacher" | "mc", string>>>;
+  },
+): StagedRow[] {
+  return records.map((row) => {
     const value: ImportNormalized = normalizeRow(
       JSON.parse(row.raw_json) as Record<string, string>,
       mapping,
@@ -451,11 +571,11 @@ export async function validateImportBatch(
     }
     addMatchErrors(
       value,
-      roleRows.results,
-      servantRows.results,
-      capabilities,
-      linkedByRow.get(row.id) ?? {},
-      pendingByRow.get(row.id) ?? {},
+      context.roles,
+      context.servants,
+      context.capabilities,
+      context.linkedByRow.get(row.id) ?? {},
+      context.pendingByRow.get(row.id) ?? {},
     );
     return {
       id: row.id,
@@ -471,6 +591,21 @@ export async function validateImportBatch(
           : "valid",
     };
   });
+}
+
+/** Flags duplicate services and resolves merge-slot conflicts in a single query. */
+async function detectDuplicates(
+  db: D1Database,
+  organizationId: string,
+  staged: StagedRow[],
+  services: Map<string, string>,
+) {
+  const pendingSlots: Array<{
+    row: StagedRow;
+    serviceId: string;
+    roleId: string;
+    slot: number;
+  }> = [];
   for (const row of staged) {
     const duplicateId =
       row.value.startsAt && row.value.locationNormalized
@@ -478,65 +613,89 @@ export async function validateImportBatch(
             `${row.value.startsAt}\u0000${row.value.locationNormalized}`,
           )
         : undefined;
-    if (duplicateId) {
-      row.value.warnings.push("DUPLICATE_SERVICE");
-      row.action = row.action === "create" ? "skip" : row.action;
-      (row as typeof row & { duplicateServiceId: string }).duplicateServiceId =
-        duplicateId;
-      row.status = row.value.errors.length ? "error" : "warning";
-      if (row.action === "merge_assignments") {
-        const assignments = [
-          row.value.resolved?.preacher,
-          row.value.resolved?.mc,
-          ...(row.value.resolved?.offering ?? []),
-        ].filter(
-          (assignment): assignment is { servantId: string; roleId: string } =>
-            assignment !== undefined,
-        );
-        for (const [index, assignment] of assignments.entries()) {
-          const slot =
-            assignments
-              .slice(0, index)
-              .filter((prior) => prior.roleId === assignment.roleId).length + 1;
-          const occupied = await db
-            .prepare(
-              "SELECT 1 FROM assignments WHERE organization_id=? AND worship_service_id=? AND service_role_id=? AND slot_number=? AND status<>'cancelled' LIMIT 1",
-            )
-            .bind(actor.organizationId, duplicateId, assignment.roleId, slot)
-            .first();
-          if (occupied) row.value.errors.push("MERGE_SLOT_CONFLICT");
-        }
-        if (row.value.errors.length) row.status = "error";
-      }
-    }
-    if (row.priorWarnings !== json(row.value.warnings))
-      row.warningsAcknowledged = false;
+    if (!duplicateId) continue;
+    row.value.warnings.push("DUPLICATE_SERVICE");
+    row.action = row.action === "create" ? "skip" : row.action;
+    row.duplicateServiceId = duplicateId;
+    row.status = row.value.errors.length ? "error" : "warning";
+    if (row.action !== "merge_assignments") continue;
+    const assignments = [
+      row.value.resolved?.preacher,
+      row.value.resolved?.mc,
+      ...(row.value.resolved?.offering ?? []),
+    ].filter(
+      (assignment): assignment is { servantId: string; roleId: string } =>
+        assignment !== undefined,
+    );
+    for (const [index, assignment] of assignments.entries())
+      pendingSlots.push({
+        row,
+        serviceId: duplicateId,
+        roleId: assignment.roleId,
+        slot:
+          assignments
+            .slice(0, index)
+            .filter((prior) => prior.roleId === assignment.roleId).length + 1,
+      });
   }
-  const status = staged.some(
+  if (!pendingSlots.length) return stageStatus(staged);
+  const occupied = await db
+    .prepare(
+      "SELECT service_role_id,slot_number,worship_service_id FROM assignments WHERE organization_id=? AND status<>'cancelled' AND (worship_service_id,service_role_id,slot_number) IN (SELECT value->>'serviceId',value->>'roleId',CAST(value->>'slot' AS INTEGER) FROM json_each(?))",
+    )
+    .bind(
+      organizationId,
+      json(
+        pendingSlots.map(({ serviceId, roleId, slot }) => ({
+          serviceId,
+          roleId,
+          slot,
+        })),
+      ),
+    )
+    .all<{
+      worship_service_id: string;
+      service_role_id: string;
+      slot_number: number;
+    }>();
+  const occupiedKeys = new Set(
+    occupied.results.map(
+      (slot) =>
+        `${slot.worship_service_id}\u0000${slot.service_role_id}\u0000${slot.slot_number}`,
+    ),
+  );
+  for (const { row, serviceId, roleId, slot } of pendingSlots)
+    if (occupiedKeys.has(`${serviceId}\u0000${roleId}\u0000${slot}`))
+      row.value.errors.push("MERGE_SLOT_CONFLICT");
+  for (const row of staged)
+    if (row.action === "merge_assignments" && row.value.errors.length)
+      row.status = "error";
+  return stageStatus(staged);
+}
+
+/** Derives the aggregate batch status from the staged rows. */
+function stageStatus(staged: StagedRow[]) {
+  return staged.some(
     (row) =>
       row.status === "error" ||
       (row.status === "warning" && !row.warningsAcknowledged),
   )
     ? "needs_review"
     : "ready";
-  const updateChunks = payloadChunks(
-    staged.map((row) => ({
-      id: row.id,
-      normalized: row.value,
-      status: row.status,
-      action: row.action,
-      duplicateServiceId:
-        (row as typeof row & { duplicateServiceId?: string })
-          .duplicateServiceId ?? null,
-      errors: row.value.errors,
-      warnings: row.value.warnings,
-      warningsAcknowledgedAt:
-        row.warningsAcknowledged &&
-        row.priorWarnings === json(row.value.warnings)
-          ? row.warningsAcknowledgedAt
-          : null,
-    })),
-  );
+}
+
+/** Writes staged rows, batch status, and the audit entry in one transaction. */
+async function persistValidation(
+  db: D1Database,
+  actor: Actor,
+  id: string,
+  mapping: ImportMapping,
+  dateFormat: ImportDateFormat,
+  status: string,
+  updateChunks: Array<Array<Record<string, unknown>>>,
+  requestId: string,
+) {
+  const at = now();
   await db.batch([
     ...updateChunks.map((chunk) =>
       db
@@ -564,7 +723,6 @@ export async function validateImportBatch(
         at,
       ),
   ]);
-  return { id, status };
 }
 export async function previewImportBatch(
   db: D1Database,
@@ -593,9 +751,13 @@ export async function previewImportBatch(
     }>();
   const data = rows.results.slice(0, limit).map((row) => ({
     ...row,
-    normalized: JSON.parse(row.normalized_json),
-    errors: JSON.parse(row.error_codes_json),
-    warnings: JSON.parse(row.warning_codes_json),
+    normalized: safeParseJson(row.normalized_json, normalizedRecordSchema, {}),
+    errors: safeParseJson(row.error_codes_json, codeListSchema, [] as string[]),
+    warnings: safeParseJson(
+      row.warning_codes_json,
+      codeListSchema,
+      [] as string[],
+    ),
   }));
   const totals = await db
     .prepare(
@@ -1166,14 +1328,12 @@ export async function commitImportBatch(
         at,
       ),
   ];
-  const uuidSql =
-    "lower(hex(randomblob(4))||'-'||hex(randomblob(2))||'-'||hex(randomblob(2))||'-'||hex(randomblob(2))||'-'||hex(randomblob(6)))";
   statements.push(
     db
       .prepare(
         `INSERT INTO import_results(id,organization_id,import_row_id,entity_type,entity_id,action,created_at)
-       SELECT ${uuidSql},organization_id,id,'worship_service',
-         CASE WHEN duplicate_service_id IS NOT NULL AND proposed_action<>'create_separate' THEN duplicate_service_id ELSE ${uuidSql} END,
+       SELECT ${uuidSqlExpression},organization_id,id,'worship_service',
+         CASE WHEN duplicate_service_id IS NOT NULL AND proposed_action<>'create_separate' THEN duplicate_service_id ELSE ${uuidSqlExpression} END,
          CASE WHEN proposed_action='merge_assignments' THEN 'merged' WHEN duplicate_service_id IS NOT NULL AND proposed_action<>'create_separate' THEN 'skipped' ELSE 'created' END,?
        FROM import_rows WHERE organization_id=? AND batch_id=? AND status IN ('valid','warning')`,
       )
@@ -1193,7 +1353,7 @@ export async function commitImportBatch(
          SELECT row.id row_id,result.entity_id service_id,json_extract(row.normalized_json,'$.resolved.preacher.roleId') role_id,json_extract(row.normalized_json,'$.resolved.preacher.servantId') servant_id,1 slot FROM import_rows row JOIN import_results result ON result.organization_id=row.organization_id AND result.import_row_id=row.id WHERE row.organization_id=? AND row.batch_id=? AND result.action<>'skipped'
          UNION ALL SELECT row.id,result.entity_id,json_extract(row.normalized_json,'$.resolved.mc.roleId'),json_extract(row.normalized_json,'$.resolved.mc.servantId'),1 FROM import_rows row JOIN import_results result ON result.organization_id=row.organization_id AND result.import_row_id=row.id WHERE row.organization_id=? AND row.batch_id=? AND result.action<>'skipped'
          UNION ALL SELECT row.id,result.entity_id,json_extract(item.value,'$.roleId'),json_extract(item.value,'$.servantId'),CAST(item.key AS INTEGER)+1 FROM import_rows row JOIN import_results result ON result.organization_id=row.organization_id AND result.import_row_id=row.id JOIN json_each(row.normalized_json,'$.resolved.offering') item WHERE row.organization_id=? AND row.batch_id=? AND result.action<>'skipped'
-       ) SELECT ${uuidSql},?,service_id,role_id,servant_id,slot,'draft',row_id,1,?,? FROM candidates candidate
+       ) SELECT ${uuidSqlExpression},?,service_id,role_id,servant_id,slot,'draft',row_id,1,?,? FROM candidates candidate
        WHERE role_id IS NOT NULL AND servant_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM assignments existing WHERE existing.organization_id=? AND existing.worship_service_id=candidate.service_id AND existing.service_role_id=candidate.role_id AND existing.slot_number=candidate.slot AND existing.status<>'cancelled')`,
       )
       .bind(
