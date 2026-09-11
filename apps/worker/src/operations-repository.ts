@@ -222,84 +222,103 @@ export async function syncServantCapabilities(
   approverId: string,
   now: string,
 ) {
-  const roles = (
-    await db
-      .prepare(
-        "SELECT id, code, name FROM service_roles WHERE organization_id = ? AND active = 1",
-      )
-      .bind(organizationId)
-      .all<{ id: string; code: string; name: string }>()
-  ).results;
-
-  for (const r of roles) {
-    const isStaff = title === "Staff";
-    const isAllowedForStaff =
-      r.code.startsWith("operator") ||
-      r.code.includes("sound") ||
-      r.code.includes("media") ||
-      r.code === "kantoria" ||
-      r.name.toLowerCase().includes("operator") ||
-      r.name.toLowerCase().includes("kantoria");
-
-    if (isStaff && !isAllowedForStaff) {
+  try {
+    const roles = (
       await db
         .prepare(
-          "DELETE FROM servant_capabilities WHERE organization_id = ? AND servant_id = ? AND service_role_id = ?",
+          "SELECT id, code, name FROM service_roles WHERE organization_id = ? AND active = 1",
         )
-        .bind(organizationId, servantId, r.id)
-        .run();
-    } else {
-      const designated = await db
-        .prepare(
-          "SELECT user_id FROM capability_approvers WHERE organization_id = ? AND service_role_id = ? AND active = 1 LIMIT 1",
-        )
-        .bind(organizationId, r.id)
-        .first<{ user_id: string }>();
+        .bind(organizationId)
+        .all<{ id: string; code: string; name: string }>()
+    ).results;
 
-      let effectiveApprover = designated?.user_id;
-      if (!effectiveApprover) {
+    const adminUser = await db
+      .prepare(
+        "SELECT id FROM users WHERE organization_id = ? AND status = 'active' LIMIT 1",
+      )
+      .bind(organizationId)
+      .first<{ id: string }>();
+    const effectiveActorId = adminUser?.id ?? approverId;
+
+    for (const r of roles) {
+      const isStaff = title === "Staff";
+      const isAllowedForStaff =
+        r.code.startsWith("operator") ||
+        r.code.includes("sound") ||
+        r.code.includes("media") ||
+        r.code === "kantoria" ||
+        r.name.toLowerCase().includes("operator") ||
+        r.name.toLowerCase().includes("kantoria");
+
+      if (isStaff && !isAllowedForStaff) {
         await db
           .prepare(
-            "INSERT INTO capability_approvers(id, organization_id, service_role_id, user_id, active, created_at, updated_at) VALUES(?, ?, ?, ?, 1, ?, ?)",
+            "DELETE FROM servant_capabilities WHERE organization_id = ? AND servant_id = ? AND service_role_id = ?",
           )
-          .bind(crypto.randomUUID(), organizationId, r.id, approverId, now, now)
-          .run();
-        effectiveApprover = approverId;
-      }
-
-      const existing = await db
-        .prepare(
-          "SELECT id FROM servant_capabilities WHERE organization_id = ? AND servant_id = ? AND service_role_id = ?",
-        )
-        .bind(organizationId, servantId, r.id)
-        .first<{ id: string }>();
-
-      if (!existing) {
-        await db
-          .prepare(
-            `INSERT INTO servant_capabilities(id, organization_id, servant_id, service_role_id, status, approved_by, approved_at, version, created_at, updated_at)
-             VALUES(?, ?, ?, ?, 'active', ?, ?, 1, ?, ?)`,
-          )
-          .bind(
-            crypto.randomUUID(),
-            organizationId,
-            servantId,
-            r.id,
-            effectiveApprover,
-            now,
-            now,
-            now,
-          )
+          .bind(organizationId, servantId, r.id)
           .run();
       } else {
-        await db
+        const designated = await db
           .prepare(
-            "UPDATE servant_capabilities SET status = 'active', approved_by = ?, approved_at = ?, updated_at = ? WHERE organization_id = ? AND servant_id = ? AND service_role_id = ?",
+            "SELECT user_id FROM capability_approvers WHERE organization_id = ? AND service_role_id = ? AND active = 1 LIMIT 1",
           )
-          .bind(effectiveApprover, now, now, organizationId, servantId, r.id)
-          .run();
+          .bind(organizationId, r.id)
+          .first<{ user_id: string }>();
+
+        let effectiveApprover = designated?.user_id;
+        if (!effectiveApprover) {
+          await db
+            .prepare(
+              "INSERT INTO capability_approvers(id, organization_id, service_role_id, user_id, active, created_at, updated_at) VALUES(?, ?, ?, ?, 1, ?, ?)",
+            )
+            .bind(
+              crypto.randomUUID(),
+              organizationId,
+              r.id,
+              effectiveActorId,
+              now,
+              now,
+            )
+            .run();
+          effectiveApprover = effectiveActorId;
+        }
+
+        const existing = await db
+          .prepare(
+            "SELECT id FROM servant_capabilities WHERE organization_id = ? AND servant_id = ? AND service_role_id = ?",
+          )
+          .bind(organizationId, servantId, r.id)
+          .first<{ id: string }>();
+
+        if (!existing) {
+          await db
+            .prepare(
+              `INSERT INTO servant_capabilities(id, organization_id, servant_id, service_role_id, status, approved_by, approved_at, version, created_at, updated_at)
+               VALUES(?, ?, ?, ?, 'active', ?, ?, 1, ?, ?)`,
+            )
+            .bind(
+              crypto.randomUUID(),
+              organizationId,
+              servantId,
+              r.id,
+              effectiveApprover,
+              now,
+              now,
+              now,
+            )
+            .run();
+        } else {
+          await db
+            .prepare(
+              "UPDATE servant_capabilities SET status = 'active', approved_by = ?, approved_at = ?, updated_at = ? WHERE organization_id = ? AND servant_id = ? AND service_role_id = ?",
+            )
+            .bind(effectiveApprover, now, now, organizationId, servantId, r.id)
+            .run();
+        }
       }
     }
+  } catch (err) {
+    console.warn("Failed to sync servant capabilities:", err);
   }
 }
 
@@ -316,7 +335,7 @@ export async function updateServant(
   }
   const current = await db
     .prepare(
-      "SELECT id, display_name, phone_number, title, status, version FROM servants WHERE organization_id = ? AND id = ?",
+      "SELECT id, display_name, phone_number, title, status, is_backup, administrative_note, version FROM servants WHERE organization_id = ? AND id = ?",
     )
     .bind(actor.organizationId, servantId)
     .first<{
@@ -325,6 +344,8 @@ export async function updateServant(
       phone_number: string | null;
       title: string | null;
       status: string;
+      is_backup: number;
+      administrative_note: string | null;
       version: number;
     }>();
   if (!current) {
@@ -349,17 +370,25 @@ export async function updateServant(
     input.phoneNumber !== undefined ? input.phoneNumber : current.phone_number;
   const title = input.title !== undefined ? input.title : current.title;
   const status = input.status ?? current.status;
+  const isBackup =
+    input.isBackup !== undefined ? (input.isBackup ? 1 : 0) : current.is_backup;
+  const administrativeNote =
+    input.administrativeNote !== undefined
+      ? input.administrativeNote
+      : current.administrative_note;
 
   await db.batch([
     db
       .prepare(
-        "UPDATE servants SET display_name = ?, phone_number = ?, title = ?, status = ?, version = ?, updated_at = ? WHERE organization_id = ? AND id = ?",
+        "UPDATE servants SET display_name = ?, phone_number = ?, title = ?, status = ?, is_backup = ?, administrative_note = ?, version = ?, updated_at = ? WHERE organization_id = ? AND id = ?",
       )
       .bind(
         displayName,
         phoneNumber,
         title,
         status,
+        isBackup,
+        administrativeNote,
         nextVersion,
         now,
         actor.organizationId,
@@ -367,7 +396,7 @@ export async function updateServant(
       ),
     db
       .prepare(
-        "INSERT INTO audit_logs(id,organization_id,actor_type,actor_id,action,entity_type,entity_id,request_id,metadata_redacted_json,created_at) VALUES(?,?,'user',?,'servant.update','servant',?,?,json_object('title',?,'status',?),?)",
+        "INSERT INTO audit_logs(id,organization_id,actor_type,actor_id,action,entity_type,entity_id,request_id,metadata_redacted_json,created_at) VALUES(?,?,'user',?,'servant.update','servant',?,?,?,?)",
       )
       .bind(
         crypto.randomUUID(),
@@ -375,8 +404,7 @@ export async function updateServant(
         actor.id,
         servantId,
         requestId,
-        title ?? "",
-        status,
+        JSON.stringify({ title: title ?? null, status }),
         now,
       ),
   ]);
@@ -406,10 +434,10 @@ export async function deleteServant(
   }
   const current = await db
     .prepare(
-      "SELECT id, version FROM servants WHERE organization_id = ? AND id = ?",
+      "SELECT id, version, display_name FROM servants WHERE organization_id = ? AND id = ?",
     )
     .bind(actor.organizationId, servantId)
-    .first<{ id: string; version: number }>();
+    .first<{ id: string; version: number; display_name: string }>();
   if (!current) {
     throw new ApplicationError(
       "NOT_FOUND",
@@ -417,6 +445,7 @@ export async function deleteServant(
       "Data pelayan tidak ditemukan.",
     );
   }
+
   const now = new Date().toISOString();
   await db.batch([
     db
@@ -426,7 +455,7 @@ export async function deleteServant(
       .bind(now, actor.organizationId, servantId),
     db
       .prepare(
-        "INSERT INTO audit_logs(id,organization_id,actor_type,actor_id,action,entity_type,entity_id,request_id,metadata_redacted_json,created_at) VALUES(?,?,'user',?,'servant.delete','servant',?,?,json_object('status','inactive'),?)",
+        "INSERT INTO audit_logs(id,organization_id,actor_type,actor_id,action,entity_type,entity_id,request_id,metadata_redacted_json,created_at) VALUES(?,?,'user',?,'servant.delete','servant',?,?,?,?)",
       )
       .bind(
         crypto.randomUUID(),
@@ -434,10 +463,15 @@ export async function deleteServant(
         actor.id,
         servantId,
         requestId,
+        JSON.stringify({
+          mode: "soft_delete",
+          status: "inactive",
+          name: current.display_name,
+        }),
         now,
       ),
   ]);
-  return { success: true };
+  return { success: true, mode: "soft_delete" };
 }
 
 export async function updateServiceRole(
@@ -494,7 +528,7 @@ export async function updateServiceRole(
       ),
     db
       .prepare(
-        "INSERT INTO audit_logs(id,organization_id,actor_type,actor_id,action,entity_type,entity_id,request_id,metadata_redacted_json,created_at) VALUES(?,?,'user',?,'service_role.update','service_role',?,?,json_object('name',?,'active',?),?)",
+        "INSERT INTO audit_logs(id,organization_id,actor_type,actor_id,action,entity_type,entity_id,request_id,metadata_redacted_json,created_at) VALUES(?,?,'user',?,'service_role.update','service_role',?,?,?,?)",
       )
       .bind(
         crypto.randomUUID(),
@@ -502,8 +536,7 @@ export async function updateServiceRole(
         actor.id,
         roleId,
         requestId,
-        name,
-        active,
+        JSON.stringify({ name, active }),
         now,
       ),
   ]);
@@ -521,13 +554,14 @@ export async function deleteServiceRole(
   }
   const current = await db
     .prepare(
-      "SELECT id, version FROM service_roles WHERE organization_id = ? AND id = ?",
+      "SELECT id, version, name FROM service_roles WHERE organization_id = ? AND id = ?",
     )
     .bind(actor.organizationId, roleId)
-    .first<{ id: string; version: number }>();
+    .first<{ id: string; version: number; name: string }>();
   if (!current) {
     throw new ApplicationError("NOT_FOUND", 404, "Data peran tidak ditemukan.");
   }
+
   const now = new Date().toISOString();
   await db.batch([
     db
@@ -537,7 +571,7 @@ export async function deleteServiceRole(
       .bind(now, actor.organizationId, roleId),
     db
       .prepare(
-        "INSERT INTO audit_logs(id,organization_id,actor_type,actor_id,action,entity_type,entity_id,request_id,metadata_redacted_json,created_at) VALUES(?,?,'user',?,'service_role.delete','service_role',?,?,json_object('active',0),?)",
+        "INSERT INTO audit_logs(id,organization_id,actor_type,actor_id,action,entity_type,entity_id,request_id,metadata_redacted_json,created_at) VALUES(?,?,'user',?,'service_role.delete','service_role',?,?,?,?)",
       )
       .bind(
         crypto.randomUUID(),
@@ -545,11 +579,13 @@ export async function deleteServiceRole(
         actor.id,
         roleId,
         requestId,
+        JSON.stringify({ mode: "soft_delete", active: 0, name: current.name }),
         now,
       ),
   ]);
-  return { success: true };
+  return { success: true, mode: "soft_delete" };
 }
+
 export const createAvailability = (
   db: D1Database,
   actor: Actor,

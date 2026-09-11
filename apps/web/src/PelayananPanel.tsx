@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  AlertCircle,
+  AlertTriangle,
   Briefcase,
   CheckCircle2,
   Layers,
@@ -11,6 +13,7 @@ import {
   Search,
   Shield,
   Sparkles,
+  Trash2,
   UserCheck,
   Users,
   X,
@@ -193,6 +196,20 @@ export function PelayananPanel({
     code: "",
   });
 
+  // Custom Delete Confirmation Modal State
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    type: "servant" | "role" | "field";
+    id: string;
+    name: string;
+    extraNote?: string;
+  }>({
+    isOpen: false,
+    type: "servant",
+    id: "",
+    name: "",
+  });
+
   // Action status message
   const [statusMessage, setStatusMessage] = useState<{
     type: "success" | "error";
@@ -319,6 +336,26 @@ export function PelayananPanel({
         ...(editingServant ? { status: servantForm.status } : {}),
       };
 
+      // Optimistic UI update
+      if (editingServant) {
+        setServants((prev) =>
+          prev.map((s) =>
+            s.id === editingServant.id
+              ? {
+                  ...s,
+                  displayName: servantForm.displayName.trim(),
+                  phoneNumber: servantForm.phoneNumber.trim() || null,
+                  title: servantForm.title || null,
+                  status: servantForm.status,
+                  isBackup: servantForm.isBackup,
+                  administrativeNote:
+                    servantForm.administrativeNote.trim() || null,
+                }
+              : s,
+          ),
+        );
+      }
+
       const res = await fetch(url, {
         method,
         credentials: "same-origin",
@@ -351,6 +388,120 @@ export function PelayananPanel({
         "error",
         err instanceof Error ? err.message : "Penyimpanan gagal.",
       );
+      // Revert / re-sync on failure
+      await fetchServants();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleOpenDeleteServant = (servant: ServantItem) => {
+    setDeleteModal({
+      isOpen: true,
+      type: "servant",
+      id: servant.id,
+      name: servant.displayName,
+      extraNote:
+        "Data pelayan ini akan dihapus permanen jika belum ada riwayat tugas jadwal, atau dinonaktifkan secara otomatis bila sudah memiliki riwayat tugas agar integritas data tetap terjaga.",
+    });
+  };
+
+  const handleOpenDeleteRole = (role: ServiceRoleItem) => {
+    setDeleteModal({
+      isOpen: true,
+      type: "role",
+      id: role.id,
+      name: role.name,
+      extraNote:
+        "Peran pelayanan ini akan dihapus jika belum pernah digunakan pada jadwal ibadah, atau dinonaktifkan secara aman bila sudah tercatat pada jadwal sebelumnya.",
+    });
+  };
+
+  const handleOpenDeleteField = (field: ServiceFieldItem) => {
+    setDeleteModal({
+      isOpen: true,
+      type: "field",
+      id: field.id,
+      name: field.name,
+      extraNote:
+        "Pastikan tidak ada peran aktif yang masih terkait ke bidang pelayanan ini.",
+    });
+  };
+
+  const handleExecuteDelete = async () => {
+    if (!deleteModal.id) return;
+    setSubmitting(true);
+    try {
+      if (deleteModal.type === "servant") {
+        // Optimistic UI removal
+        setServants((prev) => prev.filter((s) => s.id !== deleteModal.id));
+
+        const res = await fetch(`/api/v1/servants/${deleteModal.id}`, {
+          method: "DELETE",
+          credentials: "same-origin",
+        });
+        if (!res.ok) {
+          const errorData = (await res.json().catch(() => null)) as {
+            error?: { message?: string };
+          } | null;
+          throw new Error(
+            errorData?.error?.message ?? "Gagal menghapus data pelayan.",
+          );
+        }
+        showStatus(
+          "success",
+          `Data pelayan "${deleteModal.name}" berhasil dihapus/dinonaktifkan.`,
+        );
+        await fetchServants();
+      } else if (deleteModal.type === "role") {
+        // Optimistic UI removal
+        setRoles((prev) => prev.filter((r) => r.id !== deleteModal.id));
+
+        const res = await fetch(`/api/v1/service-roles/${deleteModal.id}`, {
+          method: "DELETE",
+          credentials: "same-origin",
+        });
+        if (!res.ok) {
+          const errorData = (await res.json().catch(() => null)) as {
+            error?: { message?: string };
+          } | null;
+          throw new Error(
+            errorData?.error?.message ?? "Gagal menghapus peran pelayanan.",
+          );
+        }
+        showStatus(
+          "success",
+          `Peran pelayanan "${deleteModal.name}" berhasil dihapus/dinonaktifkan.`,
+        );
+        await fetchRolesAndFields();
+      } else if (deleteModal.type === "field") {
+        setFields((prev) => prev.filter((f) => f.id !== deleteModal.id));
+        const res = await fetch(`/api/v1/fields/${deleteModal.id}`, {
+          method: "DELETE",
+          credentials: "same-origin",
+        });
+        if (!res.ok) {
+          const errorData = (await res.json().catch(() => null)) as {
+            error?: { message?: string };
+          } | null;
+          throw new Error(
+            errorData?.error?.message ?? "Gagal menghapus bidang pelayanan.",
+          );
+        }
+        showStatus(
+          "success",
+          `Bidang pelayanan "${deleteModal.name}" berhasil dihapus.`,
+        );
+        await fetchRolesAndFields();
+      }
+      setDeleteModal({ isOpen: false, type: "servant", id: "", name: "" });
+    } catch (err) {
+      showStatus(
+        "error",
+        err instanceof Error ? err.message : "Gagal memproses penghapusan.",
+      );
+      if (deleteModal.type === "servant") await fetchServants();
+      else await fetchRolesAndFields();
     } finally {
       setSubmitting(false);
     }
@@ -360,15 +511,11 @@ export function PelayananPanel({
     servant: ServantItem,
     newStatus: "active" | "inactive",
   ) => {
-    const actionName =
-      newStatus === "active" ? "mengaktifkan" : "menonaktifkan";
-    if (
-      !confirm(
-        `Apakah Anda yakin ingin ${actionName} pelayan "${servant.displayName}"?`,
-      )
-    ) {
-      return;
-    }
+    // Optimistic toggle
+    setServants((prev) =>
+      prev.map((s) => (s.id === servant.id ? { ...s, status: newStatus } : s)),
+    );
+
     try {
       const res = await fetch(`/api/v1/servants/${servant.id}`, {
         method: newStatus === "inactive" ? "DELETE" : "PUT",
@@ -386,7 +533,9 @@ export function PelayananPanel({
             : undefined,
       });
       if (!res.ok) {
-        throw new Error(`Gagal ${actionName} pelayan.`);
+        throw new Error(
+          `Gagal ${newStatus === "active" ? "mengaktifkan" : "menonaktifkan"} pelayan.`,
+        );
       }
       showStatus(
         "success",
@@ -396,8 +545,9 @@ export function PelayananPanel({
     } catch (err) {
       showStatus(
         "error",
-        err instanceof Error ? err.message : "Operasi gagal.",
+        err instanceof Error ? err.message : "Operasi status gagal.",
       );
+      await fetchServants();
     }
   };
 
@@ -476,6 +626,24 @@ export function PelayananPanel({
             criticality: roleForm.criticality,
           };
 
+      // Optimistic update
+      if (editingRole) {
+        setRoles((prev) =>
+          prev.map((r) =>
+            r.id === editingRole.id
+              ? {
+                  ...r,
+                  name: roleForm.name.trim(),
+                  fieldId: roleForm.fieldId,
+                  slotsRequired: Number(roleForm.slotsRequired),
+                  criticality: roleForm.criticality,
+                  active: Number(roleForm.active),
+                }
+              : r,
+          ),
+        );
+      }
+
       const res = await fetch(url, {
         method,
         credentials: "same-origin",
@@ -508,6 +676,7 @@ export function PelayananPanel({
         "error",
         err instanceof Error ? err.message : "Penyimpanan peran gagal.",
       );
+      await fetchRolesAndFields();
     } finally {
       setSubmitting(false);
     }
@@ -517,14 +686,11 @@ export function PelayananPanel({
     role: ServiceRoleItem,
     newActive: number,
   ) => {
-    const actionName = newActive === 1 ? "mengaktifkan" : "menonaktifkan";
-    if (
-      !confirm(
-        `Apakah Anda yakin ingin ${actionName} peran pelayanan "${role.name}"?`,
-      )
-    ) {
-      return;
-    }
+    // Optimistic toggle
+    setRoles((prev) =>
+      prev.map((r) => (r.id === role.id ? { ...r, active: newActive } : r)),
+    );
+
     try {
       const res = await fetch(`/api/v1/service-roles/${role.id}`, {
         method: newActive === 0 ? "DELETE" : "PUT",
@@ -539,7 +705,9 @@ export function PelayananPanel({
         body: newActive === 1 ? JSON.stringify({ active: 1 }) : undefined,
       });
       if (!res.ok) {
-        throw new Error(`Gagal ${actionName} peran.`);
+        throw new Error(
+          `Gagal ${newActive === 1 ? "mengaktifkan" : "menonaktifkan"} peran.`,
+        );
       }
       showStatus(
         "success",
@@ -549,8 +717,9 @@ export function PelayananPanel({
     } catch (err) {
       showStatus(
         "error",
-        err instanceof Error ? err.message : "Operasi gagal.",
+        err instanceof Error ? err.message : "Operasi status gagal.",
       );
+      await fetchRolesAndFields();
     }
   };
 
@@ -563,16 +732,10 @@ export function PelayananPanel({
   const handleSaveField = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fieldForm.name.trim()) {
-      showStatus("error", "Nama bidang wajib diisi.");
+      showStatus("error", "Nama bidang pelayanan wajib diisi.");
       return;
     }
-    const finalCode = (fieldForm.code || slugify(fieldForm.name))
-      .trim()
-      .toLowerCase();
-    if (!/^[a-z0-9_-]{1,64}$/.test(finalCode)) {
-      showStatus("error", "Kode bidang tidak valid.");
-      return;
-    }
+    const code = fieldForm.code.trim().toLowerCase() || slugify(fieldForm.name);
     setSubmitting(true);
     try {
       const res = await fetch("/api/v1/fields", {
@@ -584,7 +747,7 @@ export function PelayananPanel({
         },
         body: JSON.stringify({
           name: fieldForm.name.trim(),
-          code: finalCode,
+          code,
         }),
       });
       if (!res.ok) {
@@ -874,7 +1037,7 @@ export function PelayananPanel({
             {statusMessage.type === "success" ? (
               <CheckCircle2 size={18} />
             ) : (
-              <X size={18} />
+              <AlertCircle size={18} />
             )}
             <span style={{ fontWeight: 500 }}>{statusMessage.text}</span>
           </div>
@@ -998,28 +1161,36 @@ export function PelayananPanel({
           >
             <Shield
               size={20}
-              style={{ color: "#4f46e5", flexShrink: 0, marginTop: "2px" }}
+              color="#4f46e5"
+              style={{ flexShrink: 0, marginTop: "2px" }}
             />
-            <div style={{ fontSize: "0.85rem", color: "#334155" }}>
-              <strong style={{ display: "block", marginBottom: "4px" }}>
+            <div style={{ fontSize: "0.875rem", color: "#334155" }}>
+              <strong style={{ color: "#0f172a" }}>
                 Aturan Penugasan Berdasarkan Jabatan:
               </strong>
-              <span>
-                • <strong>Penatua</strong> &amp; <strong>Diaken</strong>: Berhak
-                mengambil seluruh peran pelayanan dalam ibadah raya &amp; ibadah
-                kategorial.
-              </span>
-              <br />
-              <span>
-                • <strong>Staff</strong>: Dibatasi khusus untuk peran{" "}
-                <strong>Operator Multimedia</strong>,{" "}
-                <strong>Operator Sound System</strong>, dan{" "}
-                <strong>Kantoria</strong>.
-              </span>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "16px",
+                  marginTop: "6px",
+                }}
+              >
+                <span>
+                  👔 <strong>Penatua & Diaken:</strong> Berhak mengambil{" "}
+                  <em>seluruh peran pelayanan</em> yang ada.
+                </span>
+                <span>
+                  💼 <strong>Staff:</strong> Khusus untuk peran{" "}
+                  <strong>Operator Multimedia</strong>,{" "}
+                  <strong>Operator Sound System</strong>, dan{" "}
+                  <strong>Kantoria</strong>.
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Action Bar & Filters */}
+          {/* Controls Bar */}
           <div
             style={{
               display: "flex",
@@ -1027,91 +1198,76 @@ export function PelayananPanel({
               alignItems: "center",
               flexWrap: "wrap",
               gap: "12px",
-              marginBottom: "18px",
+              marginBottom: "16px",
             }}
           >
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "8px",
+                gap: "10px",
                 flexWrap: "wrap",
+                flex: "1 1 500px",
               }}
             >
-              {/* Search Bar */}
+              {/* Search */}
               <div
                 style={{
                   position: "relative",
-                  display: "flex",
-                  alignItems: "center",
+                  flex: "1 1 200px",
+                  maxWidth: "320px",
                 }}
               >
                 <Search
                   size={16}
                   style={{
                     position: "absolute",
-                    left: "10px",
+                    left: "12px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
                     color: "#94a3b8",
                   }}
                 />
                 <input
                   type="text"
-                  placeholder="Cari nama atau nomor HP…"
+                  placeholder="Cari nama atau telepon..."
                   value={servantSearch}
                   onChange={(e) => setServantSearch(e.target.value)}
                   style={{
-                    padding: "8px 12px 8px 34px",
+                    width: "100%",
+                    padding: "8px 12px 8px 36px",
                     borderRadius: "8px",
                     border: "1px solid #cbd5e1",
                     fontSize: "0.875rem",
-                    width: "220px",
+                    boxSizing: "border-box",
                   }}
                 />
               </div>
 
-              {/* Title Filter Chips */}
-              <div
+              {/* Title Filter */}
+              <select
+                value={titleFilter}
+                onChange={(e) =>
+                  setTitleFilter(
+                    e.target.value as
+                      "all" | "Penatua" | "Diaken" | "Staff" | "none",
+                  )
+                }
                 style={{
-                  display: "flex",
-                  gap: "4px",
-                  backgroundColor: "#f1f5f9",
-                  padding: "3px",
+                  padding: "8px 12px",
                   borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "0.875rem",
+                  backgroundColor: "#ffffff",
+                  color: "#334155",
                 }}
               >
-                {(
-                  [
-                    ["all", "Semua"],
-                    ["Penatua", "Penatua"],
-                    ["Diaken", "Diaken"],
-                    ["Staff", "Staff"],
-                    ["none", "Tanpa Jabatan"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setTitleFilter(key)}
-                    style={{
-                      padding: "5px 10px",
-                      borderRadius: "6px",
-                      border: "none",
-                      fontSize: "0.8rem",
-                      fontWeight: titleFilter === key ? 700 : 500,
-                      backgroundColor:
-                        titleFilter === key ? "#ffffff" : "transparent",
-                      color: titleFilter === key ? "#0f172a" : "#64748b",
-                      boxShadow:
-                        titleFilter === key
-                          ? "0 1px 2px rgba(0,0,0,0.08)"
-                          : "none",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+                <option value="all">Semua Jabatan</option>
+                <option value="Penatua">Penatua</option>
+                <option value="Diaken">Diaken</option>
+                <option value="Staff">Staff</option>
+                <option value="none">Tanpa Jabatan</option>
+              </select>
 
               {/* Status Filter */}
               <select
@@ -1122,29 +1278,58 @@ export function PelayananPanel({
                   )
                 }
                 style={{
-                  padding: "7px 10px",
+                  padding: "8px 12px",
                   borderRadius: "8px",
                   border: "1px solid #cbd5e1",
-                  fontSize: "0.85rem",
+                  fontSize: "0.875rem",
                   backgroundColor: "#ffffff",
+                  color: "#334155",
                 }}
               >
-                <option value="all">Status: Semua</option>
-                <option value="active">Status: Aktif</option>
-                <option value="inactive">Status: Nonaktif</option>
+                <option value="all">Semua Status</option>
+                <option value="active">Hanya Aktif</option>
+                <option value="inactive">Nonaktif</option>
               </select>
+
+              <button
+                type="button"
+                onClick={fetchServants}
+                title="Muat Ulang"
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  backgroundColor: "#ffffff",
+                  cursor: "pointer",
+                  color: "#64748b",
+                  display: "inline-flex",
+                  alignItems: "center",
+                }}
+              >
+                <RotateCcw
+                  size={16}
+                  className={loadingServants ? "animate-spin" : ""}
+                />
+              </button>
             </div>
 
             {canManage && (
               <button
                 type="button"
-                className="primary-action"
                 onClick={handleOpenCreateServant}
                 style={{
-                  display: "flex",
+                  display: "inline-flex",
                   alignItems: "center",
                   gap: "6px",
+                  padding: "9px 16px",
+                  borderRadius: "8px",
+                  backgroundColor: "#4f46e5",
+                  color: "#ffffff",
+                  border: "none",
                   fontSize: "0.875rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  boxShadow: "0 1px 3px rgba(79, 70, 229, 0.3)",
                 }}
               >
                 <Plus size={16} />
@@ -1159,302 +1344,379 @@ export function PelayananPanel({
               backgroundColor: "#ffffff",
               borderRadius: "12px",
               border: "1px solid #e2e8f0",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
               overflow: "hidden",
             }}
           >
-            {loadingServants ? (
+            {loadingServants && servants.length === 0 ? (
               <div
                 style={{
-                  padding: "40px",
+                  padding: "48px 24px",
                   textAlign: "center",
                   color: "#64748b",
                 }}
               >
-                Memuat data pelayan…
+                <RotateCcw
+                  size={24}
+                  className="animate-spin"
+                  style={{ margin: "0 auto 12px" }}
+                />
+                <p style={{ margin: 0 }}>Memuat data pelayan...</p>
               </div>
             ) : filteredServants.length === 0 ? (
               <div
                 style={{
-                  padding: "40px",
+                  padding: "48px 24px",
                   textAlign: "center",
                   color: "#64748b",
                 }}
               >
-                Tidak ada data pelayan yang cocok dengan filter.
-              </div>
-            ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table
+                <Users
+                  size={36}
+                  color="#94a3b8"
+                  style={{ margin: "0 auto 12px" }}
+                />
+                <h3
                   style={{
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    textAlign: "left",
-                    fontSize: "0.875rem",
+                    fontSize: "1.1rem",
+                    fontWeight: 700,
+                    color: "#0f172a",
+                    margin: "0 0 4px",
                   }}
                 >
-                  <thead>
-                    <tr
-                      style={{
-                        backgroundColor: "#f8fafc",
-                        borderBottom: "1px solid #e2e8f0",
-                        color: "#475569",
-                        fontWeight: 600,
-                      }}
-                    >
-                      <th style={{ padding: "12px 16px" }}>Nama Pelayan</th>
-                      <th style={{ padding: "12px 16px" }}>No. Ponsel</th>
-                      <th style={{ padding: "12px 16px" }}>Jabatan</th>
-                      <th style={{ padding: "12px 16px" }}>Cakupan Peran</th>
-                      <th style={{ padding: "12px 16px" }}>Status</th>
-                      {canManage && (
-                        <th
-                          style={{
-                            padding: "12px 16px",
-                            textAlign: "right",
-                          }}
-                        >
-                          Aksi Pengelolaan
-                        </th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredServants.map((servant) => {
-                      const isPenatua = servant.title === "Penatua";
-                      const isDiaken = servant.title === "Diaken";
-                      const isStaff = servant.title === "Staff";
+                  Belum ada pelayan ditemukan
+                </h3>
+                <p style={{ fontSize: "0.9rem", margin: "0 0 16px" }}>
+                  {servantSearch ||
+                  titleFilter !== "all" ||
+                  statusFilter !== "all"
+                    ? "Coba ubah kata kunci pencarian atau filter di atas."
+                    : "Mulai tambahkan pelayan jemaat untuk mengelola jadwal ibadah."}
+                </p>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={handleOpenCreateServant}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "8px 14px",
+                      borderRadius: "8px",
+                      backgroundColor: "#4f46e5",
+                      color: "#ffffff",
+                      border: "none",
+                      fontSize: "0.85rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Plus size={16} />
+                    <span>Tambah Pelayan Baru</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  textAlign: "left",
+                  fontSize: "0.875rem",
+                }}
+              >
+                <thead>
+                  <tr
+                    style={{
+                      backgroundColor: "#f8fafc",
+                      borderBottom: "1px solid #e2e8f0",
+                      color: "#475569",
+                      fontWeight: 600,
+                    }}
+                  >
+                    <th style={{ padding: "12px 16px" }}>Nama Pelayan</th>
+                    <th style={{ padding: "12px 16px" }}>No. Ponsel</th>
+                    <th style={{ padding: "12px 16px" }}>Jabatan</th>
+                    <th style={{ padding: "12px 16px" }}>Cakupan Peran</th>
+                    <th style={{ padding: "12px 16px" }}>Status</th>
+                    {canManage && (
+                      <th
+                        style={{
+                          padding: "12px 16px",
+                          textAlign: "right",
+                          minWidth: "220px",
+                        }}
+                      >
+                        Aksi Pengelolaan
+                      </th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredServants.map((servant) => {
+                    const isPenatua = servant.title === "Penatua";
+                    const isDiaken = servant.title === "Diaken";
+                    const isStaff = servant.title === "Staff";
 
-                      return (
-                        <tr
-                          key={servant.id}
-                          style={{
-                            borderBottom: "1px solid #f1f5f9",
-                            opacity: servant.status === "inactive" ? 0.6 : 1,
-                          }}
-                        >
-                          <td style={{ padding: "12px 16px" }}>
+                    return (
+                      <tr
+                        key={servant.id}
+                        style={{
+                          borderBottom: "1px solid #f1f5f9",
+                          opacity: servant.status === "active" ? 1 : 0.6,
+                        }}
+                      >
+                        <td style={{ padding: "12px 16px" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "10px",
+                            }}
+                          >
                             <div
                               style={{
+                                width: "34px",
+                                height: "34px",
+                                borderRadius: "50%",
+                                backgroundColor: isPenatua
+                                  ? "#6366f1"
+                                  : isDiaken
+                                    ? "#0d9488"
+                                    : isStaff
+                                      ? "#d97706"
+                                      : "#64748b",
+                                color: "#ffffff",
                                 display: "flex",
                                 alignItems: "center",
-                                gap: "10px",
+                                justifyItems: "center",
+                                justifyContent: "center",
+                                fontWeight: 700,
+                                fontSize: "0.8rem",
                               }}
                             >
-                              <div
+                              {servant.displayName
+                                .split(" ")
+                                .map((p) => p[0])
+                                .slice(0, 2)
+                                .join("")
+                                .toUpperCase()}
+                            </div>
+                            <div>
+                              <strong
                                 style={{
-                                  width: "34px",
-                                  height: "34px",
-                                  borderRadius: "50%",
-                                  backgroundColor: isPenatua
-                                    ? "#4f46e5"
-                                    : isDiaken
-                                      ? "#0d9488"
-                                      : isStaff
-                                        ? "#d97706"
-                                        : "#64748b",
-                                  color: "#ffffff",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  fontWeight: 700,
-                                  fontSize: "0.8rem",
+                                  display: "block",
+                                  color: "#0f172a",
                                 }}
                               >
-                                {servant.displayName
-                                  .split(" ")
-                                  .map((p) => p[0])
-                                  .slice(0, 2)
-                                  .join("")
-                                  .toUpperCase()}
-                              </div>
-                              <div>
-                                <strong
+                                {servant.displayName}
+                              </strong>
+                              {servant.isBackup ? (
+                                <span
                                   style={{
-                                    display: "block",
-                                    color: "#0f172a",
+                                    fontSize: "0.7rem",
+                                    color: "#7c3aed",
+                                    backgroundColor: "#f5f3ff",
+                                    padding: "1px 6px",
+                                    borderRadius: "4px",
+                                    border: "1px solid #ddd6fe",
                                   }}
                                 >
-                                  {servant.displayName}
-                                </strong>
-                                {servant.isBackup ? (
-                                  <span
-                                    style={{
-                                      fontSize: "0.7rem",
-                                      color: "#7c3aed",
-                                      backgroundColor: "#f5f3ff",
-                                      padding: "1px 6px",
-                                      borderRadius: "4px",
-                                    }}
-                                  >
-                                    Cadangan
-                                  </span>
-                                ) : null}
-                              </div>
+                                  Cadangan
+                                </span>
+                              ) : null}
                             </div>
-                          </td>
-                          <td style={{ padding: "12px 16px" }}>
-                            {servant.phoneNumber ? (
-                              <a
-                                href={`tel:${servant.phoneNumber}`}
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "6px",
-                                  color: "#2563eb",
-                                  textDecoration: "none",
-                                  fontWeight: 500,
-                                }}
-                              >
-                                <Phone size={13} />
-                                <span>{servant.phoneNumber}</span>
-                              </a>
-                            ) : (
-                              <span style={{ color: "#94a3b8" }}>—</span>
-                            )}
-                          </td>
-                          <td style={{ padding: "12px 16px" }}>
-                            {isPenatua ? (
-                              <span
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "4px",
-                                  padding: "3px 8px",
-                                  borderRadius: "6px",
-                                  fontSize: "0.75rem",
-                                  fontWeight: 600,
-                                  backgroundColor: "#eef2ff",
-                                  color: "#4338ca",
-                                  border: "1px solid #c7d2fe",
-                                }}
-                              >
-                                <UserCheck size={12} /> Penatua
-                              </span>
-                            ) : isDiaken ? (
-                              <span
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "4px",
-                                  padding: "3px 8px",
-                                  borderRadius: "6px",
-                                  fontSize: "0.75rem",
-                                  fontWeight: 600,
-                                  backgroundColor: "#f0fdf4",
-                                  color: "#15803d",
-                                  border: "1px solid #bbf7d0",
-                                }}
-                              >
-                                <UserCheck size={12} /> Diaken
-                              </span>
-                            ) : isStaff ? (
-                              <span
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "4px",
-                                  padding: "3px 8px",
-                                  borderRadius: "6px",
-                                  fontSize: "0.75rem",
-                                  fontWeight: 600,
-                                  backgroundColor: "#fffbeb",
-                                  color: "#b45309",
-                                  border: "1px solid #fde68a",
-                                }}
-                              >
-                                <Briefcase size={12} /> Staff
-                              </span>
-                            ) : (
-                              <span
-                                style={{
-                                  padding: "3px 8px",
-                                  borderRadius: "6px",
-                                  fontSize: "0.75rem",
-                                  backgroundColor: "#f1f5f9",
-                                  color: "#64748b",
-                                }}
-                              >
-                                Tanpa Jabatan
-                              </span>
-                            )}
-                          </td>
+                          </div>
+                        </td>
+                        <td style={{ padding: "12px 16px" }}>
+                          {servant.phoneNumber ? (
+                            <a
+                              href={`tel:${servant.phoneNumber}`}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                color: "#2563eb",
+                                textDecoration: "none",
+                                fontWeight: 500,
+                              }}
+                            >
+                              <Phone size={13} />
+                              <span>{servant.phoneNumber}</span>
+                            </a>
+                          ) : (
+                            <span style={{ color: "#94a3b8" }}>—</span>
+                          )}
+                        </td>
+                        <td style={{ padding: "12px 16px" }}>
+                          {isPenatua ? (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                padding: "3px 8px",
+                                borderRadius: "6px",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                backgroundColor: "#eef2ff",
+                                color: "#4338ca",
+                                border: "1px solid #c7d2fe",
+                              }}
+                            >
+                              <UserCheck size={12} /> Penatua
+                            </span>
+                          ) : isDiaken ? (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                padding: "3px 8px",
+                                borderRadius: "6px",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                backgroundColor: "#f0fdf4",
+                                color: "#15803d",
+                                border: "1px solid #bbf7d0",
+                              }}
+                            >
+                              <UserCheck size={12} /> Diaken
+                            </span>
+                          ) : isStaff ? (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                padding: "3px 8px",
+                                borderRadius: "6px",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                backgroundColor: "#fffbeb",
+                                color: "#b45309",
+                                border: "1px solid #fde68a",
+                              }}
+                            >
+                              <Briefcase size={12} /> Staff
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                padding: "3px 8px",
+                                borderRadius: "6px",
+                                fontSize: "0.75rem",
+                                backgroundColor: "#f1f5f9",
+                                color: "#64748b",
+                              }}
+                            >
+                              Tanpa Jabatan
+                            </span>
+                          )}
+                        </td>
+                        <td
+                          style={{
+                            padding: "12px 16px",
+                            fontSize: "0.8rem",
+                            color: "#475569",
+                          }}
+                        >
+                          {isPenatua || isDiaken ? (
+                            <span style={{ color: "#166534", fontWeight: 600 }}>
+                              ✓ Semua Peran Pelayanan
+                            </span>
+                          ) : isStaff ? (
+                            <span style={{ color: "#9a3412", fontWeight: 600 }}>
+                              Operator Multimedia, Sound &amp; Kantoria
+                            </span>
+                          ) : (
+                            <span style={{ color: "#64748b" }}>
+                              Perlu Penyesuaian Jabatan
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: "12px 16px" }}>
+                          {servant.status === "active" ? (
+                            <span
+                              style={{
+                                padding: "3px 8px",
+                                borderRadius: "6px",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                backgroundColor: "#ecfdf5",
+                                color: "#047857",
+                              }}
+                            >
+                              Aktif
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                padding: "3px 8px",
+                                borderRadius: "6px",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                backgroundColor: "#fef2f2",
+                                color: "#b91c1c",
+                              }}
+                            >
+                              Nonaktif
+                            </span>
+                          )}
+                        </td>
+                        {canManage && (
                           <td
                             style={{
                               padding: "12px 16px",
-                              fontSize: "0.8rem",
-                              color: "#475569",
+                              textAlign: "right",
                             }}
                           >
-                            {isPenatua || isDiaken ? (
-                              <span
-                                style={{ color: "#166534", fontWeight: 600 }}
-                              >
-                                ✓ Semua Peran Pelayanan
-                              </span>
-                            ) : isStaff ? (
-                              <span
-                                style={{ color: "#9a3412", fontWeight: 600 }}
-                              >
-                                Operator Multimedia, Sound &amp; Kantoria
-                              </span>
-                            ) : (
-                              <span style={{ color: "#64748b" }}>
-                                Perlu Penyesuaian Jabatan
-                              </span>
-                            )}
-                          </td>
-                          <td style={{ padding: "12px 16px" }}>
-                            {servant.status === "active" ? (
-                              <span
-                                style={{
-                                  padding: "3px 8px",
-                                  borderRadius: "6px",
-                                  fontSize: "0.75rem",
-                                  fontWeight: 600,
-                                  backgroundColor: "#ecfdf5",
-                                  color: "#047857",
-                                }}
-                              >
-                                Aktif
-                              </span>
-                            ) : (
-                              <span
-                                style={{
-                                  padding: "3px 8px",
-                                  borderRadius: "6px",
-                                  fontSize: "0.75rem",
-                                  fontWeight: 600,
-                                  backgroundColor: "#fef2f2",
-                                  color: "#b91c1c",
-                                }}
-                              >
-                                Nonaktif
-                              </span>
-                            )}
-                          </td>
-                          {canManage && (
-                            <td
+                            <div
                               style={{
-                                padding: "12px 16px",
-                                textAlign: "right",
+                                display: "inline-flex",
+                                gap: "6px",
                               }}
                             >
-                              <div
+                              {/* Edit Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditServant(servant)}
+                                title="Edit Data Pelayan"
                                 style={{
+                                  padding: "6px 10px",
+                                  borderRadius: "6px",
+                                  border: "1px solid #cbd5e1",
+                                  backgroundColor: "#ffffff",
+                                  color: "#334155",
+                                  cursor: "pointer",
+                                  fontSize: "0.8rem",
                                   display: "inline-flex",
-                                  gap: "6px",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  fontWeight: 500,
                                 }}
                               >
+                                <Pencil size={13} />
+                                <span>Edit</span>
+                              </button>
+
+                              {/* Status Toggle Button */}
+                              {servant.status === "active" ? (
                                 <button
                                   type="button"
-                                  onClick={() => handleOpenEditServant(servant)}
-                                  title="Edit Data Pelayan"
+                                  onClick={() =>
+                                    handleToggleServantStatus(
+                                      servant,
+                                      "inactive",
+                                    )
+                                  }
+                                  title="Nonaktifkan Pelayan"
                                   style={{
                                     padding: "6px 10px",
                                     borderRadius: "6px",
-                                    border: "1px solid #cbd5e1",
-                                    backgroundColor: "#ffffff",
-                                    color: "#334155",
+                                    border: "1px solid #fed7aa",
+                                    backgroundColor: "#fff7ed",
+                                    color: "#c2410c",
                                     cursor: "pointer",
                                     fontSize: "0.8rem",
                                     display: "inline-flex",
@@ -1463,73 +1725,65 @@ export function PelayananPanel({
                                     fontWeight: 500,
                                   }}
                                 >
-                                  <Pencil size={13} />
-                                  <span>Edit</span>
+                                  <Power size={13} />
+                                  <span>Nonaktifkan</span>
                                 </button>
-                                {servant.status === "active" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleToggleServantStatus(
-                                        servant,
-                                        "inactive",
-                                      )
-                                    }
-                                    title="Nonaktifkan Pelayan"
-                                    style={{
-                                      padding: "6px 10px",
-                                      borderRadius: "6px",
-                                      border: "1px solid #fecaca",
-                                      backgroundColor: "#ffffff",
-                                      color: "#dc2626",
-                                      cursor: "pointer",
-                                      fontSize: "0.8rem",
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "4px",
-                                      fontWeight: 500,
-                                    }}
-                                  >
-                                    <Power size={13} />
-                                    <span>Nonaktifkan</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleToggleServantStatus(
-                                        servant,
-                                        "active",
-                                      )
-                                    }
-                                    title="Aktifkan Kembali Pelayan"
-                                    style={{
-                                      padding: "6px 10px",
-                                      borderRadius: "6px",
-                                      border: "1px solid #a7f3d0",
-                                      backgroundColor: "#ecfdf5",
-                                      color: "#047857",
-                                      cursor: "pointer",
-                                      fontSize: "0.8rem",
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "4px",
-                                      fontWeight: 600,
-                                    }}
-                                  >
-                                    <RotateCcw size={13} />
-                                    <span>Aktifkan</span>
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleToggleServantStatus(servant, "active")
+                                  }
+                                  title="Aktifkan Kembali"
+                                  style={{
+                                    padding: "6px 10px",
+                                    borderRadius: "6px",
+                                    border: "1px solid #bbf7d0",
+                                    backgroundColor: "#f0fdf4",
+                                    color: "#15803d",
+                                    cursor: "pointer",
+                                    fontSize: "0.8rem",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  <Power size={13} />
+                                  <span>Aktifkan</span>
+                                </button>
+                              )}
+
+                              {/* Explicit Delete Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenDeleteServant(servant)}
+                                title="Hapus Data Pelayan"
+                                style={{
+                                  padding: "6px 10px",
+                                  borderRadius: "6px",
+                                  border: "1px solid #fecdd3",
+                                  backgroundColor: "#fff1f2",
+                                  color: "#be123c",
+                                  cursor: "pointer",
+                                  fontSize: "0.8rem",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                <Trash2 size={13} />
+                                <span>Hapus</span>
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             )}
           </div>
         </div>
@@ -1538,7 +1792,7 @@ export function PelayananPanel({
       {/* Tab 2: Service Roles Management */}
       {activeTab === "roles" && (
         <div>
-          {/* Action Bar & Filters */}
+          {/* Controls Bar */}
           <div
             style={{
               display: "flex",
@@ -1546,43 +1800,48 @@ export function PelayananPanel({
               alignItems: "center",
               flexWrap: "wrap",
               gap: "12px",
-              marginBottom: "18px",
+              marginBottom: "16px",
             }}
           >
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "8px",
+                gap: "10px",
                 flexWrap: "wrap",
+                flex: "1 1 500px",
               }}
             >
+              {/* Search */}
               <div
                 style={{
                   position: "relative",
-                  display: "flex",
-                  alignItems: "center",
+                  flex: "1 1 200px",
+                  maxWidth: "320px",
                 }}
               >
                 <Search
                   size={16}
                   style={{
                     position: "absolute",
-                    left: "10px",
+                    left: "12px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
                     color: "#94a3b8",
                   }}
                 />
                 <input
                   type="text"
-                  placeholder="Cari peran atau kode…"
+                  placeholder="Cari peran pelayanan..."
                   value={roleSearch}
                   onChange={(e) => setRoleSearch(e.target.value)}
                   style={{
-                    padding: "8px 12px 8px 34px",
+                    width: "100%",
+                    padding: "8px 12px 8px 36px",
                     borderRadius: "8px",
                     border: "1px solid #cbd5e1",
                     fontSize: "0.875rem",
-                    width: "220px",
+                    boxSizing: "border-box",
                   }}
                 />
               </div>
@@ -1592,11 +1851,12 @@ export function PelayananPanel({
                 value={fieldFilter}
                 onChange={(e) => setFieldFilter(e.target.value)}
                 style={{
-                  padding: "7px 10px",
+                  padding: "8px 12px",
                   borderRadius: "8px",
                   border: "1px solid #cbd5e1",
-                  fontSize: "0.85rem",
+                  fontSize: "0.875rem",
                   backgroundColor: "#ffffff",
+                  color: "#334155",
                 }}
               >
                 <option value="all">Semua Bidang</option>
@@ -1616,36 +1876,63 @@ export function PelayananPanel({
                   )
                 }
                 style={{
-                  padding: "7px 10px",
+                  padding: "8px 12px",
                   borderRadius: "8px",
                   border: "1px solid #cbd5e1",
-                  fontSize: "0.85rem",
+                  fontSize: "0.875rem",
                   backgroundColor: "#ffffff",
+                  color: "#334155",
                 }}
               >
-                <option value="all">Semua Kelayakan Jabatan</option>
+                <option value="all">Semua Cakupan Kelayakan</option>
                 <option value="staff_allowed">Bisa Diambil Staff</option>
-                <option value="clergy_only">Khusus Diaken &amp; Penatua</option>
+                <option value="clergy_only">Khusus Penatua / Diaken</option>
               </select>
+
+              <button
+                type="button"
+                onClick={fetchRolesAndFields}
+                title="Muat Ulang"
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  backgroundColor: "#ffffff",
+                  cursor: "pointer",
+                  color: "#64748b",
+                  display: "inline-flex",
+                  alignItems: "center",
+                }}
+              >
+                <RotateCcw
+                  size={16}
+                  className={loadingRoles ? "animate-spin" : ""}
+                />
+              </button>
             </div>
 
             {canManage && (
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button
-                  type="button"
-                  className="primary-action"
-                  onClick={handleOpenCreateRole}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    fontSize: "0.875rem",
-                  }}
-                >
-                  <Plus size={16} />
-                  <span>Tambah Peran Pelayanan</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleOpenCreateRole}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "9px 16px",
+                  borderRadius: "8px",
+                  backgroundColor: "#4f46e5",
+                  color: "#ffffff",
+                  border: "none",
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  boxShadow: "0 1px 3px rgba(79, 70, 229, 0.3)",
+                }}
+              >
+                <Plus size={16} />
+                <span>Tambah Peran Baru</span>
+              </button>
             )}
           </div>
 
@@ -1655,223 +1942,291 @@ export function PelayananPanel({
               backgroundColor: "#ffffff",
               borderRadius: "12px",
               border: "1px solid #e2e8f0",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
               overflow: "hidden",
             }}
           >
-            {loadingRoles ? (
+            {loadingRoles && roles.length === 0 ? (
               <div
                 style={{
-                  padding: "40px",
+                  padding: "48px 24px",
                   textAlign: "center",
                   color: "#64748b",
                 }}
               >
-                Memuat jenis peran pelayanan…
+                <RotateCcw
+                  size={24}
+                  className="animate-spin"
+                  style={{ margin: "0 auto 12px" }}
+                />
+                <p style={{ margin: 0 }}>Memuat jenis peran pelayanan...</p>
               </div>
             ) : filteredRoles.length === 0 ? (
               <div
                 style={{
-                  padding: "40px",
+                  padding: "48px 24px",
                   textAlign: "center",
                   color: "#64748b",
                 }}
               >
-                Tidak ada peran pelayanan ditemukan. Klik tombol "Inisialisasi 8
-                Peran Standar" di atas untuk menambahkan daftar baku.
-              </div>
-            ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table
+                <Briefcase
+                  size={36}
+                  color="#94a3b8"
+                  style={{ margin: "0 auto 12px" }}
+                />
+                <h3
                   style={{
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    textAlign: "left",
-                    fontSize: "0.875rem",
+                    fontSize: "1.1rem",
+                    fontWeight: 700,
+                    color: "#0f172a",
+                    margin: "0 0 4px",
                   }}
                 >
-                  <thead>
-                    <tr
-                      style={{
-                        backgroundColor: "#f8fafc",
-                        borderBottom: "1px solid #e2e8f0",
-                        color: "#475569",
-                        fontWeight: 600,
-                      }}
-                    >
-                      <th style={{ padding: "12px 16px" }}>Nama Peran</th>
-                      <th style={{ padding: "12px 16px" }}>Kode Sistem</th>
-                      <th style={{ padding: "12px 16px" }}>Bidang Pelayanan</th>
-                      <th style={{ padding: "12px 16px" }}>Kebutuhan Slot</th>
-                      <th style={{ padding: "12px 16px" }}>
-                        Kelayakan Jabatan
+                  Belum ada peran pelayanan
+                </h3>
+                <p style={{ fontSize: "0.9rem", margin: "0 0 16px" }}>
+                  Klik tombol di bawah untuk menginisialisasi 8 peran standar
+                  atau buat peran kustom.
+                </p>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={handleSeedStandardRoles}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "8px 14px",
+                      borderRadius: "8px",
+                      backgroundColor: "#4f46e5",
+                      color: "#ffffff",
+                      border: "none",
+                      fontSize: "0.85rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Sparkles size={16} />
+                    <span>Inisialisasi 8 Peran Standar</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  textAlign: "left",
+                  fontSize: "0.875rem",
+                }}
+              >
+                <thead>
+                  <tr
+                    style={{
+                      backgroundColor: "#f8fafc",
+                      borderBottom: "1px solid #e2e8f0",
+                      color: "#475569",
+                      fontWeight: 600,
+                    }}
+                  >
+                    <th style={{ padding: "12px 16px" }}>Nama Peran</th>
+                    <th style={{ padding: "12px 16px" }}>Kode Sistem</th>
+                    <th style={{ padding: "12px 16px" }}>Bidang Pelayanan</th>
+                    <th style={{ padding: "12px 16px" }}>Kebutuhan Slot</th>
+                    <th style={{ padding: "12px 16px" }}>Kelayakan Jabatan</th>
+                    <th style={{ padding: "12px 16px" }}>Status</th>
+                    {canManage && (
+                      <th
+                        style={{
+                          padding: "12px 16px",
+                          textAlign: "right",
+                          minWidth: "220px",
+                        }}
+                      >
+                        Aksi Pengelolaan
                       </th>
-                      <th style={{ padding: "12px 16px" }}>Status</th>
-                      {canManage && (
-                        <th
-                          style={{
-                            padding: "12px 16px",
-                            textAlign: "right",
-                          }}
-                        >
-                          Aksi Pengelolaan
-                        </th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredRoles.map((role) => {
-                      const isOperatorOrKantoria =
-                        role.code.startsWith("operator") ||
-                        role.code.includes("sound") ||
-                        role.code.includes("media") ||
-                        role.code === "kantoria" ||
-                        role.name.toLowerCase().includes("operator") ||
-                        role.name.toLowerCase().includes("kantoria");
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRoles.map((role) => {
+                    const isOperatorOrKantoria =
+                      role.code.startsWith("operator") ||
+                      role.code.includes("sound") ||
+                      role.code.includes("media") ||
+                      role.code === "kantoria" ||
+                      role.name.toLowerCase().includes("operator") ||
+                      role.name.toLowerCase().includes("kantoria");
 
-                      return (
-                        <tr
-                          key={role.id}
-                          style={{
-                            borderBottom: "1px solid #f1f5f9",
-                            opacity: role.active ? 1 : 0.6,
-                          }}
-                        >
-                          <td style={{ padding: "12px 16px" }}>
+                    return (
+                      <tr
+                        key={role.id}
+                        style={{
+                          borderBottom: "1px solid #f1f5f9",
+                          opacity: role.active ? 1 : 0.6,
+                        }}
+                      >
+                        <td style={{ padding: "12px 16px" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                            }}
+                          >
+                            <strong
+                              style={{
+                                color: "#0f172a",
+                              }}
+                            >
+                              {role.name}
+                            </strong>
+                            {role.criticality === "critical" && (
+                              <span
+                                style={{
+                                  fontSize: "0.7rem",
+                                  fontWeight: 600,
+                                  color: "#b91c1c",
+                                  backgroundColor: "#fef2f2",
+                                  padding: "1px 6px",
+                                  borderRadius: "4px",
+                                  border: "1px solid #fecaca",
+                                }}
+                              >
+                                Kritis
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td style={{ padding: "12px 16px" }}>
+                          <code
+                            style={{
+                              backgroundColor: "#f1f5f9",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              fontSize: "0.8rem",
+                              color: "#475569",
+                            }}
+                          >
+                            {role.code}
+                          </code>
+                        </td>
+                        <td style={{ padding: "12px 16px", color: "#334155" }}>
+                          {fieldMap.get(role.fieldId) ?? role.fieldId}
+                        </td>
+                        <td style={{ padding: "12px 16px", color: "#334155" }}>
+                          <strong>{role.slotsRequired}</strong> orang
+                        </td>
+                        <td style={{ padding: "12px 16px" }}>
+                          {isOperatorOrKantoria ? (
+                            <span
+                              style={{
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                padding: "2px 8px",
+                                borderRadius: "6px",
+                                backgroundColor: "#fffbeb",
+                                color: "#b45309",
+                                border: "1px solid #fde68a",
+                              }}
+                            >
+                              Semua Jabatan Termasuk Staff
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                padding: "2px 8px",
+                                borderRadius: "6px",
+                                backgroundColor: "#f0fdf4",
+                                color: "#15803d",
+                                border: "1px solid #bbf7d0",
+                              }}
+                            >
+                              Hanya Penatua &amp; Diaken
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: "12px 16px" }}>
+                          {role.active ? (
+                            <span
+                              style={{
+                                padding: "3px 8px",
+                                borderRadius: "6px",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                backgroundColor: "#ecfdf5",
+                                color: "#047857",
+                              }}
+                            >
+                              Aktif
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                padding: "3px 8px",
+                                borderRadius: "6px",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                backgroundColor: "#fef2f2",
+                                color: "#b91c1c",
+                              }}
+                            >
+                              Nonaktif
+                            </span>
+                          )}
+                        </td>
+                        {canManage && (
+                          <td
+                            style={{
+                              padding: "12px 16px",
+                              textAlign: "right",
+                            }}
+                          >
                             <div
                               style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "8px",
+                                display: "inline-flex",
+                                gap: "6px",
                               }}
                             >
-                              <strong
+                              {/* Edit Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditRole(role)}
+                                title="Edit Peran"
                                 style={{
-                                  color: "#0f172a",
-                                }}
-                              >
-                                {role.name}
-                              </strong>
-                              {role.criticality === "critical" && (
-                                <span
-                                  style={{
-                                    fontSize: "0.7rem",
-                                    fontWeight: 600,
-                                    color: "#b91c1c",
-                                    backgroundColor: "#fef2f2",
-                                    padding: "1px 6px",
-                                    borderRadius: "4px",
-                                    border: "1px solid #fecaca",
-                                  }}
-                                >
-                                  Kritis
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td style={{ padding: "12px 16px" }}>
-                            <code
-                              style={{
-                                backgroundColor: "#f1f5f9",
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                                fontSize: "0.8rem",
-                                color: "#475569",
-                              }}
-                            >
-                              {role.code}
-                            </code>
-                          </td>
-                          <td
-                            style={{ padding: "12px 16px", color: "#334155" }}
-                          >
-                            {fieldMap.get(role.fieldId) ?? role.fieldId}
-                          </td>
-                          <td
-                            style={{ padding: "12px 16px", color: "#334155" }}
-                          >
-                            <strong>{role.slotsRequired}</strong> orang
-                          </td>
-                          <td style={{ padding: "12px 16px" }}>
-                            {isOperatorOrKantoria ? (
-                              <span
-                                style={{
-                                  fontSize: "0.75rem",
-                                  fontWeight: 600,
-                                  padding: "2px 8px",
+                                  padding: "6px 10px",
                                   borderRadius: "6px",
-                                  backgroundColor: "#ecfdf5",
-                                  color: "#047857",
-                                }}
-                              >
-                                Diaken, Penatua &amp; Staff
-                              </span>
-                            ) : (
-                              <span
-                                style={{
-                                  fontSize: "0.75rem",
-                                  fontWeight: 600,
-                                  padding: "2px 8px",
-                                  borderRadius: "6px",
-                                  backgroundColor: "#eef2ff",
-                                  color: "#4338ca",
-                                }}
-                              >
-                                Khusus Diaken &amp; Penatua
-                              </span>
-                            )}
-                          </td>
-                          <td style={{ padding: "12px 16px" }}>
-                            {role.active ? (
-                              <span
-                                style={{
-                                  padding: "3px 8px",
-                                  borderRadius: "6px",
-                                  fontSize: "0.75rem",
-                                  fontWeight: 600,
-                                  backgroundColor: "#ecfdf5",
-                                  color: "#047857",
-                                }}
-                              >
-                                Aktif
-                              </span>
-                            ) : (
-                              <span
-                                style={{
-                                  padding: "3px 8px",
-                                  borderRadius: "6px",
-                                  fontSize: "0.75rem",
-                                  fontWeight: 600,
-                                  backgroundColor: "#fef2f2",
-                                  color: "#b91c1c",
-                                }}
-                              >
-                                Nonaktif
-                              </span>
-                            )}
-                          </td>
-                          {canManage && (
-                            <td
-                              style={{
-                                padding: "12px 16px",
-                                textAlign: "right",
-                              }}
-                            >
-                              <div
-                                style={{
+                                  border: "1px solid #cbd5e1",
+                                  backgroundColor: "#ffffff",
+                                  color: "#334155",
+                                  cursor: "pointer",
+                                  fontSize: "0.8rem",
                                   display: "inline-flex",
-                                  gap: "6px",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  fontWeight: 500,
                                 }}
                               >
+                                <Pencil size={13} />
+                                <span>Edit</span>
+                              </button>
+
+                              {/* Status Toggle Button */}
+                              {role.active === 1 ? (
                                 <button
                                   type="button"
-                                  onClick={() => handleOpenEditRole(role)}
-                                  title="Edit Peran"
+                                  onClick={() =>
+                                    handleToggleRoleStatus(role, 0)
+                                  }
+                                  title="Nonaktifkan Peran"
                                   style={{
                                     padding: "6px 10px",
                                     borderRadius: "6px",
-                                    border: "1px solid #cbd5e1",
-                                    backgroundColor: "#ffffff",
-                                    color: "#334155",
+                                    border: "1px solid #fed7aa",
+                                    backgroundColor: "#fff7ed",
+                                    color: "#c2410c",
                                     cursor: "pointer",
                                     fontSize: "0.8rem",
                                     display: "inline-flex",
@@ -1880,73 +2235,71 @@ export function PelayananPanel({
                                     fontWeight: 500,
                                   }}
                                 >
-                                  <Pencil size={13} />
-                                  <span>Edit</span>
+                                  <Power size={13} />
+                                  <span>Nonaktifkan</span>
                                 </button>
-                                {role.active === 1 ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleToggleRoleStatus(role, 0)
-                                    }
-                                    title="Nonaktifkan Peran"
-                                    style={{
-                                      padding: "6px 10px",
-                                      borderRadius: "6px",
-                                      border: "1px solid #fecaca",
-                                      backgroundColor: "#ffffff",
-                                      color: "#dc2626",
-                                      cursor: "pointer",
-                                      fontSize: "0.8rem",
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "4px",
-                                      fontWeight: 500,
-                                    }}
-                                  >
-                                    <Power size={13} />
-                                    <span>Nonaktifkan</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleToggleRoleStatus(role, 1)
-                                    }
-                                    title="Aktifkan Kembali Peran"
-                                    style={{
-                                      padding: "6px 10px",
-                                      borderRadius: "6px",
-                                      border: "1px solid #a7f3d0",
-                                      backgroundColor: "#ecfdf5",
-                                      color: "#047857",
-                                      cursor: "pointer",
-                                      fontSize: "0.8rem",
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "4px",
-                                      fontWeight: 600,
-                                    }}
-                                  >
-                                    <RotateCcw size={13} />
-                                    <span>Aktifkan</span>
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleToggleRoleStatus(role, 1)
+                                  }
+                                  title="Aktifkan Peran"
+                                  style={{
+                                    padding: "6px 10px",
+                                    borderRadius: "6px",
+                                    border: "1px solid #bbf7d0",
+                                    backgroundColor: "#f0fdf4",
+                                    color: "#15803d",
+                                    cursor: "pointer",
+                                    fontSize: "0.8rem",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  <Power size={13} />
+                                  <span>Aktifkan</span>
+                                </button>
+                              )}
+
+                              {/* Explicit Delete Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenDeleteRole(role)}
+                                title="Hapus Peran"
+                                style={{
+                                  padding: "6px 10px",
+                                  borderRadius: "6px",
+                                  border: "1px solid #fecdd3",
+                                  backgroundColor: "#fff1f2",
+                                  color: "#be123c",
+                                  cursor: "pointer",
+                                  fontSize: "0.8rem",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                <Trash2 size={13} />
+                                <span>Hapus</span>
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             )}
           </div>
         </div>
       )}
 
-      {/* Tab 3: Fields Management */}
+      {/* Tab 3: Service Fields Management */}
       {activeTab === "fields" && (
         <div>
           <div
@@ -1954,23 +2307,29 @@ export function PelayananPanel({
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              marginBottom: "18px",
+              marginBottom: "16px",
             }}
           >
-            <p style={{ color: "#64748b", margin: 0, fontSize: "0.9rem" }}>
-              Kelola struktur bidang pelayanan gerejawi untuk mengelompokkan
-              peran pelayanan dan koordinator bidang.
+            <p style={{ margin: 0, fontSize: "0.9rem", color: "#64748b" }}>
+              Bidang pelayanan mengelompokkan berbagai jenis peran pelayanan
+              dalam ibadah.
             </p>
             {canManage && (
               <button
                 type="button"
-                className="primary-action"
                 onClick={handleOpenCreateField}
                 style={{
-                  display: "flex",
+                  display: "inline-flex",
                   alignItems: "center",
                   gap: "6px",
+                  padding: "9px 16px",
+                  borderRadius: "8px",
+                  backgroundColor: "#4f46e5",
+                  color: "#ffffff",
+                  border: "none",
                   fontSize: "0.875rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
                 }}
               >
                 <Plus size={16} />
@@ -1984,18 +2343,24 @@ export function PelayananPanel({
               backgroundColor: "#ffffff",
               borderRadius: "12px",
               border: "1px solid #e2e8f0",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
               overflow: "hidden",
             }}
           >
             {fields.length === 0 ? (
               <div
                 style={{
-                  padding: "40px",
+                  padding: "48px 24px",
                   textAlign: "center",
                   color: "#64748b",
                 }}
               >
-                Belum ada bidang pelayanan. Klik tombol "Tambah Bidang Baru".
+                <Layers
+                  size={36}
+                  color="#94a3b8"
+                  style={{ margin: "0 auto 12px" }}
+                />
+                <p style={{ margin: 0 }}>Belum ada bidang pelayanan.</p>
               </div>
             ) : (
               <table
@@ -2021,6 +2386,16 @@ export function PelayananPanel({
                       Jumlah Peran Terkait
                     </th>
                     <th style={{ padding: "12px 16px" }}>Status</th>
+                    {canManage && (
+                      <th
+                        style={{
+                          padding: "12px 16px",
+                          textAlign: "right",
+                        }}
+                      >
+                        Aksi
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -2065,6 +2440,36 @@ export function PelayananPanel({
                             Aktif
                           </span>
                         </td>
+                        {canManage && (
+                          <td
+                            style={{
+                              padding: "12px 16px",
+                              textAlign: "right",
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDeleteField(f)}
+                              title="Hapus Bidang"
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: "6px",
+                                border: "1px solid #fecdd3",
+                                backgroundColor: "#fff1f2",
+                                color: "#be123c",
+                                cursor: "pointer",
+                                fontSize: "0.8rem",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                fontWeight: 600,
+                              }}
+                            >
+                              <Trash2 size={13} />
+                              <span>Hapus</span>
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -2082,7 +2487,7 @@ export function PelayananPanel({
             position: "fixed",
             inset: 0,
             backgroundColor: "rgba(15, 23, 42, 0.6)",
-            backdropFilter: "blur(2px)",
+            backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -2094,10 +2499,10 @@ export function PelayananPanel({
           <div
             style={{
               backgroundColor: "#ffffff",
-              borderRadius: "14px",
+              borderRadius: "16px",
               width: "100%",
-              maxWidth: "520px",
-              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
+              maxWidth: "540px",
+              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
               overflow: "hidden",
             }}
             onClick={(e) => e.stopPropagation()}
@@ -2107,20 +2512,35 @@ export function PelayananPanel({
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                padding: "16px 20px",
+                padding: "18px 24px",
                 borderBottom: "1px solid #e2e8f0",
+                backgroundColor: "#f8fafc",
               }}
             >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: "1.15rem",
-                  fontWeight: 700,
-                  color: "#0f172a",
-                }}
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "10px" }}
               >
-                {editingServant ? "Edit Data Pelayan" : "Tambah Pelayan Baru"}
-              </h2>
+                <div
+                  style={{
+                    padding: "8px",
+                    borderRadius: "10px",
+                    backgroundColor: "#e0e7ff",
+                    color: "#4338ca",
+                  }}
+                >
+                  <Users size={20} />
+                </div>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: "1.15rem",
+                    fontWeight: 700,
+                    color: "#0f172a",
+                  }}
+                >
+                  {editingServant ? "Edit Data Pelayan" : "Tambah Pelayan Baru"}
+                </h2>
+              </div>
               <button
                 type="button"
                 onClick={() => setServantModalOpen(false)}
@@ -2129,13 +2549,14 @@ export function PelayananPanel({
                   border: "none",
                   color: "#64748b",
                   cursor: "pointer",
+                  padding: "4px",
                 }}
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveServant} style={{ padding: "20px" }}>
+            <form onSubmit={handleSaveServant} style={{ padding: "24px" }}>
               <div style={{ marginBottom: "16px" }}>
                 <label
                   style={{
@@ -2162,10 +2583,10 @@ export function PelayananPanel({
                   }
                   style={{
                     width: "100%",
-                    padding: "8px 12px",
+                    padding: "10px 14px",
                     borderRadius: "8px",
                     border: "1px solid #cbd5e1",
-                    fontSize: "0.875rem",
+                    fontSize: "0.9rem",
                     boxSizing: "border-box",
                   }}
                 />
@@ -2195,10 +2616,10 @@ export function PelayananPanel({
                   }
                   style={{
                     width: "100%",
-                    padding: "8px 12px",
+                    padding: "10px 14px",
                     borderRadius: "8px",
                     border: "1px solid #cbd5e1",
-                    fontSize: "0.875rem",
+                    fontSize: "0.9rem",
                     boxSizing: "border-box",
                   }}
                 />
@@ -2227,21 +2648,23 @@ export function PelayananPanel({
                   }
                   style={{
                     width: "100%",
-                    padding: "8px 12px",
+                    padding: "10px 14px",
                     borderRadius: "8px",
                     border: "1px solid #cbd5e1",
-                    fontSize: "0.875rem",
+                    fontSize: "0.9rem",
                     boxSizing: "border-box",
                     backgroundColor: "#ffffff",
                   }}
                 >
                   <option value="">-- Tanpa Jabatan Khusus --</option>
                   <option value="Penatua">
-                    Penatua (Semua Peran Pelayanan)
+                    Penatua (Berhak Semua Peran Pelayanan)
                   </option>
-                  <option value="Diaken">Diaken (Semua Peran Pelayanan)</option>
+                  <option value="Diaken">
+                    Diaken (Berhak Semua Peran Pelayanan)
+                  </option>
                   <option value="Staff">
-                    Staff (Terbatas Operator &amp; Kantoria)
+                    Staff (Terbatas Operator Multimedia, Sound &amp; Kantoria)
                   </option>
                 </select>
                 <p
@@ -2254,11 +2677,11 @@ export function PelayananPanel({
                   }}
                 >
                   {servantForm.title === "Staff"
-                    ? "⚠️ Perhatian: Staff hanya dapat ditugaskan untuk Operator Multimedia, Sound System, dan Kantoria."
+                    ? "⚠️ Catatan: Sesuai aturan gerejawi, Staff hanya dapat ditugaskan untuk Operator Multimedia, Sound System, dan Kantoria."
                     : servantForm.title === "Penatua" ||
                         servantForm.title === "Diaken"
-                      ? "✓ Penatua dan Diaken berhak ditugaskan untuk seluruh peran pelayanan."
-                      : "Pilih jabatan untuk memberikan hak cakupan penugasan yang sesuai."}
+                      ? "✓ Penatua dan Diaken dapat ditugaskan ke seluruh peran pelayanan ibadah."
+                      : "Pilih jabatan untuk memberikan hak cakupan penugasan yang sesuai aturan."}
                 </p>
               </div>
 
@@ -2285,21 +2708,23 @@ export function PelayananPanel({
                     }
                     style={{
                       width: "100%",
-                      padding: "8px 12px",
+                      padding: "10px 14px",
                       borderRadius: "8px",
                       border: "1px solid #cbd5e1",
-                      fontSize: "0.875rem",
+                      fontSize: "0.9rem",
                       boxSizing: "border-box",
                       backgroundColor: "#ffffff",
                     }}
                   >
-                    <option value="active">Aktif</option>
-                    <option value="inactive">Nonaktif</option>
+                    <option value="active">Aktif (Dapat Ditugaskan)</option>
+                    <option value="inactive">
+                      Nonaktif (Sementara Tidak Bertugas)
+                    </option>
                   </select>
                 </div>
               )}
 
-              <div style={{ marginBottom: "20px" }}>
+              <div style={{ marginBottom: "16px" }}>
                 <label
                   style={{
                     display: "flex",
@@ -2319,37 +2744,91 @@ export function PelayananPanel({
                         isBackup: e.target.checked,
                       })
                     }
-                    style={{ width: "16px", height: "16px" }}
+                    style={{ width: "18px", height: "18px" }}
                   />
                   <span>
-                    Daftarkan sebagai <strong>Pelayan Cadangan</strong>{" "}
-                    (Standby)
+                    Daftarkan sebagai <strong>Pelayan Cadangan</strong> (Standby
+                    saat petugas utama berhalangan)
                   </span>
                 </label>
+              </div>
+
+              {/* Administrative Note */}
+              <div style={{ marginBottom: "20px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.875rem",
+                    fontWeight: 600,
+                    color: "#334155",
+                    marginBottom: "6px",
+                  }}
+                >
+                  Catatan Administratif / Keterangan Khusus
+                </label>
+                <textarea
+                  placeholder="Catatan tambahan pelayan (misal: domisili, preferensi jam ibadah, riwayat penahbisan)..."
+                  rows={3}
+                  value={servantForm.administrativeNote}
+                  onChange={(e) =>
+                    setServantForm({
+                      ...servantForm,
+                      administrativeNote: e.target.value,
+                    })
+                  }
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "0.9rem",
+                    boxSizing: "border-box",
+                    fontFamily: "inherit",
+                  }}
+                />
               </div>
 
               <div
                 style={{
                   display: "flex",
                   justifyContent: "flex-end",
-                  gap: "8px",
+                  gap: "10px",
                   borderTop: "1px solid #f1f5f9",
-                  paddingTop: "16px",
+                  paddingTop: "18px",
                 }}
               >
                 <button
                   type="button"
                   className="soft-action"
                   onClick={() => setServantModalOpen(false)}
+                  style={{
+                    padding: "9px 18px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    backgroundColor: "#ffffff",
+                    cursor: "pointer",
+                    fontWeight: 500,
+                  }}
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="primary-action"
                   disabled={submitting}
+                  style={{
+                    padding: "9px 20px",
+                    borderRadius: "8px",
+                    backgroundColor: "#4f46e5",
+                    color: "#ffffff",
+                    border: "none",
+                    fontWeight: 600,
+                    cursor: submitting ? "not-allowed" : "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
                 >
-                  {submitting ? "Menyimpan…" : "Simpan Pelayan"}
+                  {submitting ? "Menyimpan…" : "Simpan Data Pelayan"}
                 </button>
               </div>
             </form>
@@ -2364,7 +2843,7 @@ export function PelayananPanel({
             position: "fixed",
             inset: 0,
             backgroundColor: "rgba(15, 23, 42, 0.6)",
-            backdropFilter: "blur(2px)",
+            backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -2376,10 +2855,10 @@ export function PelayananPanel({
           <div
             style={{
               backgroundColor: "#ffffff",
-              borderRadius: "14px",
+              borderRadius: "16px",
               width: "100%",
-              maxWidth: "520px",
-              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
+              maxWidth: "540px",
+              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
               overflow: "hidden",
             }}
             onClick={(e) => e.stopPropagation()}
@@ -2389,22 +2868,37 @@ export function PelayananPanel({
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                padding: "16px 20px",
+                padding: "18px 24px",
                 borderBottom: "1px solid #e2e8f0",
+                backgroundColor: "#f8fafc",
               }}
             >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: "1.15rem",
-                  fontWeight: 700,
-                  color: "#0f172a",
-                }}
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "10px" }}
               >
-                {editingRole
-                  ? "Edit Peran Pelayanan"
-                  : "Tambah Peran Pelayanan Baru"}
-              </h2>
+                <div
+                  style={{
+                    padding: "8px",
+                    borderRadius: "10px",
+                    backgroundColor: "#e0e7ff",
+                    color: "#4338ca",
+                  }}
+                >
+                  <Briefcase size={20} />
+                </div>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: "1.15rem",
+                    fontWeight: 700,
+                    color: "#0f172a",
+                  }}
+                >
+                  {editingRole
+                    ? "Edit Jenis Peran Pelayanan"
+                    : "Tambah Peran Pelayanan Baru"}
+                </h2>
+              </div>
               <button
                 type="button"
                 onClick={() => setRoleModalOpen(false)}
@@ -2413,13 +2907,14 @@ export function PelayananPanel({
                   border: "none",
                   color: "#64748b",
                   cursor: "pointer",
+                  padding: "4px",
                 }}
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveRole} style={{ padding: "20px" }}>
+            <form onSubmit={handleSaveRole} style={{ padding: "24px" }}>
               <div style={{ marginBottom: "16px" }}>
                 <label
                   style={{
@@ -2439,22 +2934,22 @@ export function PelayananPanel({
                   placeholder="Contoh: Pelayan Firman"
                   value={roleForm.name}
                   onChange={(e) => {
-                    const newName = e.target.value;
-                    setRoleForm({
-                      ...roleForm,
-                      name: newName,
+                    const val = e.target.value;
+                    setRoleForm((prev) => ({
+                      ...prev,
+                      name: val,
                       code:
-                        roleForm.autoCode && !editingRole
-                          ? slugify(newName)
-                          : roleForm.code,
-                    });
+                        prev.autoCode && !editingRole
+                          ? slugify(val)
+                          : prev.code,
+                    }));
                   }}
                   style={{
                     width: "100%",
-                    padding: "8px 12px",
+                    padding: "10px 14px",
                     borderRadius: "8px",
                     border: "1px solid #cbd5e1",
-                    fontSize: "0.875rem",
+                    fontSize: "0.9rem",
                     boxSizing: "border-box",
                   }}
                 />
@@ -2462,136 +2957,83 @@ export function PelayananPanel({
 
               {!editingRole && (
                 <div style={{ marginBottom: "16px" }}>
-                  <div
+                  <label
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
+                      display: "block",
+                      fontSize: "0.875rem",
+                      fontWeight: 600,
+                      color: "#334155",
                       marginBottom: "6px",
                     }}
                   >
-                    <label
-                      style={{
-                        fontSize: "0.875rem",
-                        fontWeight: 600,
-                        color: "#334155",
-                      }}
-                    >
-                      Kode Sistem <span style={{ color: "#e11d48" }}>*</span>
-                    </label>
-                    <label
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#64748b",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={roleForm.autoCode}
-                        onChange={(e) =>
-                          setRoleForm({
-                            ...roleForm,
-                            autoCode: e.target.checked,
-                            code: e.target.checked
-                              ? slugify(roleForm.name)
-                              : roleForm.code,
-                          })
-                        }
-                      />
-                      <span>Auto dari nama</span>
-                    </label>
-                  </div>
+                    Kode Sistem Peran{" "}
+                    <span style={{ color: "#e11d48" }}>*</span>
+                  </label>
                   <input
                     type="text"
                     required
                     placeholder="Contoh: pelayan_firman"
                     value={roleForm.code}
-                    disabled={roleForm.autoCode}
                     onChange={(e) =>
                       setRoleForm({
                         ...roleForm,
                         code: e.target.value.toLowerCase(),
+                        autoCode: false,
                       })
                     }
                     style={{
                       width: "100%",
-                      padding: "8px 12px",
+                      padding: "10px 14px",
                       borderRadius: "8px",
                       border: "1px solid #cbd5e1",
-                      fontSize: "0.875rem",
+                      fontSize: "0.9rem",
                       boxSizing: "border-box",
-                      backgroundColor: roleForm.autoCode
-                        ? "#f8fafc"
-                        : "#ffffff",
+                      fontFamily: "monospace",
                     }}
                   />
                   <p
                     style={{
-                      fontSize: "0.75rem",
+                      fontSize: "0.78rem",
                       color: "#64748b",
                       marginTop: "4px",
                     }}
                   >
-                    Format: huruf kecil, angka, underscore (_) atau strip (-).
+                    Gunakan huruf kecil, angka, dan garis bawah (_).
                   </p>
                 </div>
               )}
 
               <div style={{ marginBottom: "16px" }}>
-                <div
+                <label
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
+                    display: "block",
+                    fontSize: "0.875rem",
+                    fontWeight: 600,
+                    color: "#334155",
                     marginBottom: "6px",
                   }}
                 >
-                  <label
-                    style={{
-                      fontSize: "0.875rem",
-                      fontWeight: 600,
-                      color: "#334155",
-                    }}
-                  >
-                    Bidang Pelayanan <span style={{ color: "#e11d48" }}>*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleOpenCreateField}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "#4f46e5",
-                      fontSize: "0.75rem",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      padding: 0,
-                    }}
-                  >
-                    + Tambah Bidang Baru
-                  </button>
-                </div>
+                  Bidang Pelayanan <span style={{ color: "#e11d48" }}>*</span>
+                </label>
                 <select
-                  required
                   value={roleForm.fieldId}
                   onChange={(e) =>
                     setRoleForm({ ...roleForm, fieldId: e.target.value })
                   }
+                  required
                   style={{
                     width: "100%",
-                    padding: "8px 12px",
+                    padding: "10px 14px",
                     borderRadius: "8px",
                     border: "1px solid #cbd5e1",
-                    fontSize: "0.875rem",
+                    fontSize: "0.9rem",
                     boxSizing: "border-box",
                     backgroundColor: "#ffffff",
                   }}
                 >
-                  <option value="">-- Pilih Bidang Pelayanan --</option>
+                  <option value="" disabled>
+                    -- Pilih Bidang Pelayanan --
+                  </option>
                   {fields.map((f) => (
                     <option key={f.id} value={f.id}>
                       {f.name} ({f.code})
@@ -2604,7 +3046,7 @@ export function PelayananPanel({
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr 1fr",
-                  gap: "12px",
+                  gap: "16px",
                   marginBottom: "16px",
                 }}
               >
@@ -2623,25 +3065,25 @@ export function PelayananPanel({
                   <input
                     type="number"
                     min={1}
-                    max={99}
-                    required
+                    max={50}
                     value={roleForm.slotsRequired}
                     onChange={(e) =>
                       setRoleForm({
                         ...roleForm,
-                        slotsRequired: Number(e.target.value),
+                        slotsRequired: Number(e.target.value) || 1,
                       })
                     }
                     style={{
                       width: "100%",
-                      padding: "8px 12px",
+                      padding: "10px 14px",
                       borderRadius: "8px",
                       border: "1px solid #cbd5e1",
-                      fontSize: "0.875rem",
+                      fontSize: "0.9rem",
                       boxSizing: "border-box",
                     }}
                   />
                 </div>
+
                 <div>
                   <label
                     style={{
@@ -2664,10 +3106,10 @@ export function PelayananPanel({
                     }
                     style={{
                       width: "100%",
-                      padding: "8px 12px",
+                      padding: "10px 14px",
                       borderRadius: "8px",
                       border: "1px solid #cbd5e1",
-                      fontSize: "0.875rem",
+                      fontSize: "0.9rem",
                       boxSizing: "border-box",
                       backgroundColor: "#ffffff",
                     }}
@@ -2689,7 +3131,7 @@ export function PelayananPanel({
                       marginBottom: "6px",
                     }}
                   >
-                    Status Keaktifan Peran
+                    Status Keaktifan
                   </label>
                   <select
                     value={roleForm.active}
@@ -2701,15 +3143,15 @@ export function PelayananPanel({
                     }
                     style={{
                       width: "100%",
-                      padding: "8px 12px",
+                      padding: "10px 14px",
                       borderRadius: "8px",
                       border: "1px solid #cbd5e1",
-                      fontSize: "0.875rem",
+                      fontSize: "0.9rem",
                       boxSizing: "border-box",
                       backgroundColor: "#ffffff",
                     }}
                   >
-                    <option value={1}>Aktif</option>
+                    <option value={1}>Aktif (Bisa Dipilih di Jadwal)</option>
                     <option value={0}>Nonaktif</option>
                   </select>
                 </div>
@@ -2719,24 +3161,43 @@ export function PelayananPanel({
                 style={{
                   display: "flex",
                   justifyContent: "flex-end",
-                  gap: "8px",
+                  gap: "10px",
                   borderTop: "1px solid #f1f5f9",
-                  paddingTop: "16px",
+                  paddingTop: "18px",
                 }}
               >
                 <button
                   type="button"
                   className="soft-action"
                   onClick={() => setRoleModalOpen(false)}
+                  style={{
+                    padding: "9px 18px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    backgroundColor: "#ffffff",
+                    cursor: "pointer",
+                    fontWeight: 500,
+                  }}
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="primary-action"
                   disabled={submitting}
+                  style={{
+                    padding: "9px 20px",
+                    borderRadius: "8px",
+                    backgroundColor: "#4f46e5",
+                    color: "#ffffff",
+                    border: "none",
+                    fontWeight: 600,
+                    cursor: submitting ? "not-allowed" : "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
                 >
-                  {submitting ? "Menyimpan…" : "Simpan Peran"}
+                  {submitting ? "Menyimpan…" : "Simpan Peran Pelayanan"}
                 </button>
               </div>
             </form>
@@ -2751,11 +3212,11 @@ export function PelayananPanel({
             position: "fixed",
             inset: 0,
             backgroundColor: "rgba(15, 23, 42, 0.6)",
-            backdropFilter: "blur(2px)",
+            backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 1100,
+            zIndex: 1000,
             padding: "16px",
           }}
           onClick={() => setFieldModalOpen(false)}
@@ -2763,10 +3224,10 @@ export function PelayananPanel({
           <div
             style={{
               backgroundColor: "#ffffff",
-              borderRadius: "14px",
+              borderRadius: "16px",
               width: "100%",
               maxWidth: "460px",
-              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
+              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
               overflow: "hidden",
             }}
             onClick={(e) => e.stopPropagation()}
@@ -2776,20 +3237,35 @@ export function PelayananPanel({
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                padding: "16px 20px",
+                padding: "18px 24px",
                 borderBottom: "1px solid #e2e8f0",
+                backgroundColor: "#f8fafc",
               }}
             >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: "1.15rem",
-                  fontWeight: 700,
-                  color: "#0f172a",
-                }}
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "10px" }}
               >
-                Tambah Bidang Pelayanan Baru
-              </h2>
+                <div
+                  style={{
+                    padding: "8px",
+                    borderRadius: "10px",
+                    backgroundColor: "#e0e7ff",
+                    color: "#4338ca",
+                  }}
+                >
+                  <Layers size={20} />
+                </div>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: "1.15rem",
+                    fontWeight: 700,
+                    color: "#0f172a",
+                  }}
+                >
+                  Tambah Bidang Pelayanan
+                </h2>
+              </div>
               <button
                 type="button"
                 onClick={() => setFieldModalOpen(false)}
@@ -2804,7 +3280,7 @@ export function PelayananPanel({
               </button>
             </div>
 
-            <form onSubmit={handleSaveField} style={{ padding: "20px" }}>
+            <form onSubmit={handleSaveField} style={{ padding: "24px" }}>
               <div style={{ marginBottom: "16px" }}>
                 <label
                   style={{
@@ -2821,21 +3297,23 @@ export function PelayananPanel({
                 <input
                   type="text"
                   required
-                  placeholder="Contoh: Firman & Liturgi"
+                  placeholder="Contoh: Musik & Pujian"
                   value={fieldForm.name}
                   onChange={(e) =>
                     setFieldForm({
                       ...fieldForm,
                       name: e.target.value,
-                      code: fieldForm.code || slugify(e.target.value),
+                      code: fieldForm.code
+                        ? fieldForm.code
+                        : slugify(e.target.value),
                     })
                   }
                   style={{
                     width: "100%",
-                    padding: "8px 12px",
+                    padding: "10px 14px",
                     borderRadius: "8px",
                     border: "1px solid #cbd5e1",
-                    fontSize: "0.875rem",
+                    fontSize: "0.9rem",
                     boxSizing: "border-box",
                   }}
                 />
@@ -2855,7 +3333,7 @@ export function PelayananPanel({
                 </label>
                 <input
                   type="text"
-                  placeholder="Contoh: liturgi"
+                  placeholder="Contoh: musik"
                   value={fieldForm.code}
                   onChange={(e) =>
                     setFieldForm({
@@ -2865,11 +3343,12 @@ export function PelayananPanel({
                   }
                   style={{
                     width: "100%",
-                    padding: "8px 12px",
+                    padding: "10px 14px",
                     borderRadius: "8px",
                     border: "1px solid #cbd5e1",
-                    fontSize: "0.875rem",
+                    fontSize: "0.9rem",
                     boxSizing: "border-box",
+                    fontFamily: "monospace",
                   }}
                 />
               </div>
@@ -2878,27 +3357,199 @@ export function PelayananPanel({
                 style={{
                   display: "flex",
                   justifyContent: "flex-end",
-                  gap: "8px",
+                  gap: "10px",
                   borderTop: "1px solid #f1f5f9",
-                  paddingTop: "16px",
+                  paddingTop: "18px",
                 }}
               >
                 <button
                   type="button"
                   className="soft-action"
                   onClick={() => setFieldModalOpen(false)}
+                  style={{
+                    padding: "9px 18px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    backgroundColor: "#ffffff",
+                    cursor: "pointer",
+                  }}
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="primary-action"
                   disabled={submitting}
+                  style={{
+                    padding: "9px 20px",
+                    borderRadius: "8px",
+                    backgroundColor: "#4f46e5",
+                    color: "#ffffff",
+                    border: "none",
+                    fontWeight: 600,
+                    cursor: submitting ? "not-allowed" : "pointer",
+                  }}
                 >
                   {submitting ? "Menyimpan…" : "Simpan Bidang"}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Delete Confirmation Modal */}
+      {deleteModal.isOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.65)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1100,
+            padding: "16px",
+          }}
+          onClick={() =>
+            setDeleteModal({ isOpen: false, type: "servant", id: "", name: "" })
+          }
+        >
+          <div
+            style={{
+              backgroundColor: "#ffffff",
+              borderRadius: "16px",
+              width: "100%",
+              maxWidth: "480px",
+              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+              overflow: "hidden",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: "24px 24px 20px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "14px",
+                  marginBottom: "16px",
+                }}
+              >
+                <div
+                  style={{
+                    width: "44px",
+                    height: "44px",
+                    borderRadius: "12px",
+                    backgroundColor: "#fee2e2",
+                    color: "#b91c1c",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <AlertTriangle size={24} />
+                </div>
+                <div>
+                  <h3
+                    style={{
+                      margin: "0 0 4px",
+                      fontSize: "1.2rem",
+                      fontWeight: 700,
+                      color: "#0f172a",
+                    }}
+                  >
+                    {deleteModal.type === "servant"
+                      ? "Hapus Data Pelayan"
+                      : deleteModal.type === "role"
+                        ? "Hapus Jenis Peran Pelayanan"
+                        : "Hapus Bidang Pelayanan"}
+                  </h3>
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#64748b",
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    Apakah Anda yakin ingin menghapus{" "}
+                    <strong style={{ color: "#0f172a" }}>
+                      "{deleteModal.name}"
+                    </strong>
+                    ?
+                  </p>
+                </div>
+              </div>
+
+              {deleteModal.extraNote && (
+                <div
+                  style={{
+                    padding: "12px 14px",
+                    borderRadius: "8px",
+                    backgroundColor: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    fontSize: "0.825rem",
+                    color: "#475569",
+                    lineHeight: 1.5,
+                    marginBottom: "20px",
+                  }}
+                >
+                  🛡️ {deleteModal.extraNote}
+                </div>
+              )}
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "10px",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDeleteModal({
+                      isOpen: false,
+                      type: "servant",
+                      id: "",
+                      name: "",
+                    })
+                  }
+                  style={{
+                    padding: "9px 18px",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    backgroundColor: "#ffffff",
+                    cursor: "pointer",
+                    fontWeight: 500,
+                    color: "#334155",
+                  }}
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={handleExecuteDelete}
+                  style={{
+                    padding: "9px 20px",
+                    borderRadius: "8px",
+                    backgroundColor: "#dc2626",
+                    color: "#ffffff",
+                    border: "none",
+                    fontWeight: 600,
+                    cursor: submitting ? "not-allowed" : "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    boxShadow: "0 1px 3px rgba(220, 38, 38, 0.4)",
+                  }}
+                >
+                  <Trash2 size={16} />
+                  <span>{submitting ? "Memproses…" : "Ya, Hapus Data"}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
