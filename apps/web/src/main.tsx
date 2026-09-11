@@ -46,6 +46,23 @@ function App() {
   const [attempt, setAttempt] = useState(0);
   const [accessKey, setAccessKey] = useState("");
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const keyParam = params.get("key") || params.get("preview_key");
+    if (keyParam) {
+      setPreviewAuthKey(keyParam);
+      setAccessKey(keyParam);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("key");
+      url.searchParams.delete("preview_key");
+      window.history.replaceState(
+        {},
+        "",
+        url.pathname + (url.search ? url.search : ""),
+      );
+      setAttempt((v) => v + 1);
+    }
+  }, []);
+  useEffect(() => {
     if (preview) return;
     const controller = new AbortController();
     async function loadIdentity() {
@@ -124,10 +141,15 @@ function App() {
               Satu tempat untuk mempersiapkan ibadah dan mendukung setiap
               pelayan.
             </p>
-            <section
+            <form
               className="panel"
               aria-live="polite"
               aria-busy={view.state === "loading"}
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (view.state === "denied") setPreviewAuthKey(accessKey);
+                setAttempt((value) => value + 1);
+              }}
             >
               {view.state === "loading" ? (
                 <>
@@ -159,10 +181,7 @@ function App() {
                     />
                   )}
                   <button
-                    onClick={() => {
-                      if (view.state === "denied") setPreviewAuthKey(accessKey);
-                      setAttempt((value) => value + 1);
-                    }}
+                    type="submit"
                     disabled={
                       view.state === "denied" &&
                       !accessKey.trim() &&
@@ -174,7 +193,7 @@ function App() {
                   </button>
                 </>
               )}
-            </section>
+            </form>
             <aside>
               <span className="dot" aria-hidden="true" />
               <p>
