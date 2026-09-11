@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -6,16 +5,18 @@ describe("Supabase PostgreSQL migration", () => {
   const database = new PGlite();
 
   beforeAll(async () => {
-    const migration = readFileSync(
-      "supabase/migrations/20260910000000_spi_schema.sql",
-      "utf8",
-    )
-      // Supabase supplies pgcrypto and its API roles. The embedded PostgreSQL
-      // validator intentionally has neither, so only those provider statements
-      // are removed from this local syntax/constraint test.
-      .replace("create extension if not exists pgcrypto;", "")
-      .replace(/^revoke .*$/gmu, "");
-    await database.exec(migration);
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const dir = resolve("supabase/migrations");
+    const files = readdirSync(dir)
+      .filter((f) => f.endsWith(".sql"))
+      .sort();
+    for (const file of files) {
+      const migration = readFileSync(resolve(dir, file), "utf8")
+        .replace("create extension if not exists pgcrypto;", "")
+        .replace(/^revoke .*$/gmu, "");
+      await database.exec(migration);
+    }
   }, 20_000);
 
   afterAll(async () => database.close());

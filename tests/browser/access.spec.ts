@@ -31,13 +31,15 @@ test("mobile access denial, retry and verified empty state", async ({
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  const box = await page
-    .getByRole("button", { name: "Periksa kembali" })
-    .boundingBox();
+  const submitButton = page.getByRole("button", { name: "Masuk" });
+  const box = await submitButton.boundingBox();
   expect(box?.height).toBeGreaterThanOrEqual(44);
   await page.screenshot({ path: "dist/qa/mobile-access.png", fullPage: true });
   allowed = true;
-  await page.getByRole("button", { name: "Periksa kembali" }).click();
+  await page
+    .getByPlaceholder("Kunci akses preview")
+    .fill("synthetic-preview-key");
+  await submitButton.click();
   await expect(
     page.getByRole("heading", { name: "Selamat pagi, Pengurus." }),
   ).toBeVisible();
