@@ -13,21 +13,45 @@ const code = z
   .regex(/^[a-z0-9_-]{1,64}$/);
 const timestamp = z.iso.datetime({ offset: true });
 export const createFieldSchema = z.object({ code, name }).strict();
-export const createServiceRoleSchema = z
-  .object({
-    fieldId: resourceIdSchema,
-    code,
-    name,
-    slotsRequired: z.number().int().min(1).max(99).default(1),
-    criticality: z.enum(["normal", "critical"]).default("normal"),
-  })
-  .strict();
+export const createServiceRoleSchema = z.object({
+  fieldId: resourceIdSchema,
+  code,
+  name,
+  slotsRequired: z.number().int().min(1).max(99).default(1),
+  criticality: z.enum(["normal", "critical"]).default("normal"),
+});
+export const servantTitles = ["Diaken", "Penatua", "Staff"] as const;
+export type ServantTitle = (typeof servantTitles)[number];
+
 export const createServantSchema = z
   .object({
     userId: resourceIdSchema.nullable().optional(),
     displayName: name,
+    phoneNumber: z.string().trim().max(30).nullable().optional(),
+    title: z.enum(servantTitles).nullable().optional(),
     isBackup: z.boolean().default(false),
     administrativeNote: z.string().trim().max(2000).optional(),
+  })
+  .strict();
+export const updateServantSchema = z
+  .object({
+    displayName: name.optional(),
+    phoneNumber: z.string().trim().max(30).nullable().optional(),
+    title: z.enum(servantTitles).nullable().optional(),
+    status: z.enum(["active", "inactive", "pending_review"]).optional(),
+    isBackup: z.boolean().optional(),
+    administrativeNote: z.string().trim().max(2000).nullable().optional(),
+    version: z.number().int().positive().optional(),
+  })
+  .strict();
+export const updateServiceRoleSchema = z
+  .object({
+    fieldId: resourceIdSchema.optional(),
+    name: name.optional(),
+    slotsRequired: z.number().int().min(1).max(99).optional(),
+    criticality: z.enum(["normal", "critical"]).optional(),
+    active: z.number().int().min(0).max(1).optional(),
+    version: z.number().int().positive().optional(),
   })
   .strict();
 export const createAvailabilitySchema = z
@@ -80,6 +104,8 @@ export const createCoordinatorScopeSchema = z
 export type CreateField = z.infer<typeof createFieldSchema>;
 export type CreateServiceRole = z.infer<typeof createServiceRoleSchema>;
 export type CreateServant = z.infer<typeof createServantSchema>;
+export type UpdateServant = z.infer<typeof updateServantSchema>;
+export type UpdateServiceRole = z.infer<typeof updateServiceRoleSchema>;
 export type CreateAvailability = z.infer<typeof createAvailabilitySchema>;
 export type CreateCapabilityApprover = z.infer<
   typeof createCapabilityApproverSchema

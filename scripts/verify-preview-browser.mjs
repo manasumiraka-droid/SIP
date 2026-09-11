@@ -89,7 +89,14 @@ async function main() {
   // 8. Laporan Pribadi (Johan)
   console.log("Capturing 7. Laporan Pribadi (Johan)...");
   await page.click('nav a[href="#laporan"]');
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(1000);
+  const personalTabBtn = page.locator(
+    'button:has-text("Laporan Pelayanan Saya")',
+  );
+  if (await personalTabBtn.isVisible()) {
+    await personalTabBtn.click();
+    await page.waitForTimeout(1000);
+  }
   await page.screenshot({
     path: path.join(targetDir, "preview_pelayan_laporan.png"),
     fullPage: true,

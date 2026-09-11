@@ -31,6 +31,7 @@ it("enforces tenant foreign keys, role uniqueness and append-only audit", () => 
       "0023_remote_trigger_compatibility.sql",
       "0024_replacement_incidents.sql",
       "0025_attendance_and_performance.sql",
+      "0026_servant_phone_and_title.sql",
     ])
       db.exec(readFileSync(`migrations/${migration}`, "utf8"));
     db.exec(

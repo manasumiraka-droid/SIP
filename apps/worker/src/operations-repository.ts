@@ -8,6 +8,8 @@ import type {
   CreateField,
   CreateServant,
   CreateServiceRole,
+  UpdateServant,
+  UpdateServiceRole,
 } from "../../../packages/validation/src/operations";
 
 async function digest(value: unknown) {
@@ -166,14 +168,14 @@ export const createServiceRole = (
           now,
         ),
   );
-export const createServant = (
+export const createServant = async (
   db: D1Database,
   actor: Actor,
   input: CreateServant,
   key: string,
   requestId: string,
-) =>
-  createOperational(
+) => {
+  const result = await createOperational(
     db,
     actor,
     key,
@@ -184,19 +186,370 @@ export const createServant = (
     (id, now) =>
       db
         .prepare(
-          "INSERT INTO servants(id,organization_id,user_id,display_name,is_backup,administrative_note,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
+          "INSERT INTO servants(id,organization_id,user_id,display_name,phone_number,title,is_backup,administrative_note,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
         )
         .bind(
           id,
           actor.organizationId,
           input.userId ?? null,
           input.displayName,
+          input.phoneNumber ?? null,
+          input.title ?? null,
           input.isBackup ? 1 : 0,
           input.administrativeNote ?? null,
           now,
           now,
         ),
   );
+  if (input.title) {
+    await syncServantCapabilities(
+      db,
+      actor.organizationId,
+      result.id,
+      input.title,
+      actor.id,
+      new Date().toISOString(),
+    );
+  }
+  return result;
+};
+
+export async function syncServantCapabilities(
+  db: D1Database,
+  organizationId: string,
+  servantId: string,
+  title: string,
+  approverId: string,
+  now: string,
+) {
+  const roles = (
+    await db
+      .prepare(
+        "SELECT id, code, name FROM service_roles WHERE organization_id = ? AND active = 1",
+      )
+      .bind(organizationId)
+      .all<{ id: string; code: string; name: string }>()
+  ).results;
+
+  for (const r of roles) {
+    const isStaff = title === "Staff";
+    const isAllowedForStaff =
+      r.code.startsWith("operator") ||
+      r.code.includes("sound") ||
+      r.code.includes("media") ||
+      r.code === "kantoria" ||
+      r.name.toLowerCase().includes("operator") ||
+      r.name.toLowerCase().includes("kantoria");
+
+    if (isStaff && !isAllowedForStaff) {
+      await db
+        .prepare(
+          "DELETE FROM servant_capabilities WHERE organization_id = ? AND servant_id = ? AND service_role_id = ?",
+        )
+        .bind(organizationId, servantId, r.id)
+        .run();
+    } else {
+      const designated = await db
+        .prepare(
+          "SELECT user_id FROM capability_approvers WHERE organization_id = ? AND service_role_id = ? AND active = 1 LIMIT 1",
+        )
+        .bind(organizationId, r.id)
+        .first<{ user_id: string }>();
+
+      let effectiveApprover = designated?.user_id;
+      if (!effectiveApprover) {
+        await db
+          .prepare(
+            "INSERT INTO capability_approvers(id, organization_id, service_role_id, user_id, active, created_at, updated_at) VALUES(?, ?, ?, ?, 1, ?, ?)",
+          )
+          .bind(crypto.randomUUID(), organizationId, r.id, approverId, now, now)
+          .run();
+        effectiveApprover = approverId;
+      }
+
+      const existing = await db
+        .prepare(
+          "SELECT id FROM servant_capabilities WHERE organization_id = ? AND servant_id = ? AND service_role_id = ?",
+        )
+        .bind(organizationId, servantId, r.id)
+        .first<{ id: string }>();
+
+      if (!existing) {
+        await db
+          .prepare(
+            `INSERT INTO servant_capabilities(id, organization_id, servant_id, service_role_id, status, approved_by, approved_at, version, created_at, updated_at)
+             VALUES(?, ?, ?, ?, 'active', ?, ?, 1, ?, ?)`,
+          )
+          .bind(
+            crypto.randomUUID(),
+            organizationId,
+            servantId,
+            r.id,
+            effectiveApprover,
+            now,
+            now,
+            now,
+          )
+          .run();
+      } else {
+        await db
+          .prepare(
+            "UPDATE servant_capabilities SET status = 'active', approved_by = ?, approved_at = ?, updated_at = ? WHERE organization_id = ? AND servant_id = ? AND service_role_id = ?",
+          )
+          .bind(effectiveApprover, now, now, organizationId, servantId, r.id)
+          .run();
+      }
+    }
+  }
+}
+
+export async function updateServant(
+  db: D1Database,
+  actor: Actor,
+  servantId: string,
+  input: UpdateServant,
+  _key: string,
+  requestId: string,
+) {
+  if (!actor.roles.some((r) => r === "super_admin" || r === "admin")) {
+    throw new ApplicationError("FORBIDDEN", 403, "Akses tidak diizinkan.");
+  }
+  const current = await db
+    .prepare(
+      "SELECT id, display_name, phone_number, title, status, version FROM servants WHERE organization_id = ? AND id = ?",
+    )
+    .bind(actor.organizationId, servantId)
+    .first<{
+      id: string;
+      display_name: string;
+      phone_number: string | null;
+      title: string | null;
+      status: string;
+      version: number;
+    }>();
+  if (!current) {
+    throw new ApplicationError(
+      "NOT_FOUND",
+      404,
+      "Data pelayan tidak ditemukan.",
+    );
+  }
+  if (input.version != null && input.version !== current.version) {
+    throw new ApplicationError(
+      "CONFLICT",
+      409,
+      "Versi data pelayan tidak sesuai.",
+    );
+  }
+
+  const now = new Date().toISOString();
+  const nextVersion = current.version + 1;
+  const displayName = input.displayName ?? current.display_name;
+  const phoneNumber =
+    input.phoneNumber !== undefined ? input.phoneNumber : current.phone_number;
+  const title = input.title !== undefined ? input.title : current.title;
+  const status = input.status ?? current.status;
+
+  await db.batch([
+    db
+      .prepare(
+        "UPDATE servants SET display_name = ?, phone_number = ?, title = ?, status = ?, version = ?, updated_at = ? WHERE organization_id = ? AND id = ?",
+      )
+      .bind(
+        displayName,
+        phoneNumber,
+        title,
+        status,
+        nextVersion,
+        now,
+        actor.organizationId,
+        servantId,
+      ),
+    db
+      .prepare(
+        "INSERT INTO audit_logs(id,organization_id,actor_type,actor_id,action,entity_type,entity_id,request_id,metadata_redacted_json,created_at) VALUES(?,?,'user',?,'servant.update','servant',?,?,json_object('title',?,'status',?),?)",
+      )
+      .bind(
+        crypto.randomUUID(),
+        actor.organizationId,
+        actor.id,
+        servantId,
+        requestId,
+        title ?? "",
+        status,
+        now,
+      ),
+  ]);
+
+  if (title) {
+    await syncServantCapabilities(
+      db,
+      actor.organizationId,
+      servantId,
+      title,
+      actor.id,
+      now,
+    );
+  }
+
+  return { id: servantId, version: nextVersion };
+}
+
+export async function deleteServant(
+  db: D1Database,
+  actor: Actor,
+  servantId: string,
+  requestId: string,
+) {
+  if (!actor.roles.some((r) => r === "super_admin" || r === "admin")) {
+    throw new ApplicationError("FORBIDDEN", 403, "Akses tidak diizinkan.");
+  }
+  const current = await db
+    .prepare(
+      "SELECT id, version FROM servants WHERE organization_id = ? AND id = ?",
+    )
+    .bind(actor.organizationId, servantId)
+    .first<{ id: string; version: number }>();
+  if (!current) {
+    throw new ApplicationError(
+      "NOT_FOUND",
+      404,
+      "Data pelayan tidak ditemukan.",
+    );
+  }
+  const now = new Date().toISOString();
+  await db.batch([
+    db
+      .prepare(
+        "UPDATE servants SET status = 'inactive', version = version + 1, updated_at = ? WHERE organization_id = ? AND id = ?",
+      )
+      .bind(now, actor.organizationId, servantId),
+    db
+      .prepare(
+        "INSERT INTO audit_logs(id,organization_id,actor_type,actor_id,action,entity_type,entity_id,request_id,metadata_redacted_json,created_at) VALUES(?,?,'user',?,'servant.delete','servant',?,?,json_object('status','inactive'),?)",
+      )
+      .bind(
+        crypto.randomUUID(),
+        actor.organizationId,
+        actor.id,
+        servantId,
+        requestId,
+        now,
+      ),
+  ]);
+  return { success: true };
+}
+
+export async function updateServiceRole(
+  db: D1Database,
+  actor: Actor,
+  roleId: string,
+  input: UpdateServiceRole,
+  requestId: string,
+) {
+  if (!actor.roles.some((r) => r === "super_admin" || r === "admin")) {
+    throw new ApplicationError("FORBIDDEN", 403, "Akses tidak diizinkan.");
+  }
+  const current = await db
+    .prepare(
+      "SELECT id, name, field_id, slots_required, criticality, active, version FROM service_roles WHERE organization_id = ? AND id = ?",
+    )
+    .bind(actor.organizationId, roleId)
+    .first<{
+      id: string;
+      name: string;
+      field_id: string;
+      slots_required: number;
+      criticality: string;
+      active: number;
+      version: number;
+    }>();
+  if (!current) {
+    throw new ApplicationError("NOT_FOUND", 404, "Data peran tidak ditemukan.");
+  }
+
+  const now = new Date().toISOString();
+  const nextVersion = current.version + 1;
+  const name = input.name ?? current.name;
+  const fieldId = input.fieldId ?? current.field_id;
+  const slotsRequired = input.slotsRequired ?? current.slots_required;
+  const criticality = input.criticality ?? current.criticality;
+  const active = input.active !== undefined ? input.active : current.active;
+
+  await db.batch([
+    db
+      .prepare(
+        "UPDATE service_roles SET name = ?, field_id = ?, slots_required = ?, criticality = ?, active = ?, version = ?, updated_at = ? WHERE organization_id = ? AND id = ?",
+      )
+      .bind(
+        name,
+        fieldId,
+        slotsRequired,
+        criticality,
+        active,
+        nextVersion,
+        now,
+        actor.organizationId,
+        roleId,
+      ),
+    db
+      .prepare(
+        "INSERT INTO audit_logs(id,organization_id,actor_type,actor_id,action,entity_type,entity_id,request_id,metadata_redacted_json,created_at) VALUES(?,?,'user',?,'service_role.update','service_role',?,?,json_object('name',?,'active',?),?)",
+      )
+      .bind(
+        crypto.randomUUID(),
+        actor.organizationId,
+        actor.id,
+        roleId,
+        requestId,
+        name,
+        active,
+        now,
+      ),
+  ]);
+  return { id: roleId, version: nextVersion };
+}
+
+export async function deleteServiceRole(
+  db: D1Database,
+  actor: Actor,
+  roleId: string,
+  requestId: string,
+) {
+  if (!actor.roles.some((r) => r === "super_admin" || r === "admin")) {
+    throw new ApplicationError("FORBIDDEN", 403, "Akses tidak diizinkan.");
+  }
+  const current = await db
+    .prepare(
+      "SELECT id, version FROM service_roles WHERE organization_id = ? AND id = ?",
+    )
+    .bind(actor.organizationId, roleId)
+    .first<{ id: string; version: number }>();
+  if (!current) {
+    throw new ApplicationError("NOT_FOUND", 404, "Data peran tidak ditemukan.");
+  }
+  const now = new Date().toISOString();
+  await db.batch([
+    db
+      .prepare(
+        "UPDATE service_roles SET active = 0, version = version + 1, updated_at = ? WHERE organization_id = ? AND id = ?",
+      )
+      .bind(now, actor.organizationId, roleId),
+    db
+      .prepare(
+        "INSERT INTO audit_logs(id,organization_id,actor_type,actor_id,action,entity_type,entity_id,request_id,metadata_redacted_json,created_at) VALUES(?,?,'user',?,'service_role.delete','service_role',?,?,json_object('active',0),?)",
+      )
+      .bind(
+        crypto.randomUUID(),
+        actor.organizationId,
+        actor.id,
+        roleId,
+        requestId,
+        now,
+      ),
+  ]);
+  return { success: true };
+}
 export const createAvailability = (
   db: D1Database,
   actor: Actor,
@@ -369,7 +722,7 @@ export async function listServants(
   return (
     await db
       .prepare(
-        `SELECT s.id,s.display_name AS displayName,s.status,s.is_backup AS isBackup,s.version,CASE WHEN ?=1 THEN s.administrative_note ELSE NULL END AS administrativeNote
+        `SELECT s.id,s.display_name AS displayName,s.phone_number AS phoneNumber,s.title,s.status,s.is_backup AS isBackup,s.version,CASE WHEN ?=1 THEN s.administrative_note ELSE NULL END AS administrativeNote
          FROM servants s WHERE s.organization_id=? AND (?=1 OR s.user_id=? OR EXISTS(
            SELECT 1 FROM assignments a JOIN service_roles sr ON sr.organization_id=a.organization_id AND sr.id=a.service_role_id
            JOIN coordinator_scopes cs ON cs.organization_id=a.organization_id AND cs.user_id=? AND cs.starts_at<=? AND (cs.ends_at IS NULL OR cs.ends_at>?)

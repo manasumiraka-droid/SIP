@@ -101,6 +101,7 @@ beforeAll(async () => {
     "0017_import_pending_receipts.sql",
     "0018_import_review_controls.sql",
     "0023_remote_trigger_compatibility.sql",
+    "0026_servant_phone_and_title.sql",
   ])
     await migrate(`migrations/${name}`);
   for (const org of ["a", "b"])

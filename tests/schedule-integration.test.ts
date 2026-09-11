@@ -51,6 +51,9 @@ beforeAll(async () => {
     "0021_telegram_activation_idempotency.sql",
     "0022_telegram_emergency_idempotency.sql",
     "0023_remote_trigger_compatibility.sql",
+    "0024_replacement_incidents.sql",
+    "0025_attendance_and_performance.sql",
+    "0026_servant_phone_and_title.sql",
   ])
     await migrate(`migrations/${name}`);
   await db

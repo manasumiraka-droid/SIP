@@ -50,6 +50,39 @@ export async function createAssignment(
   };
   const prior = await receipt();
   if (prior) return replay(prior);
+
+  // Validate ecclesiastical title restriction: Staff is restricted only to Operator and Kantoria
+  const servant = await db
+    .prepare(
+      "SELECT id, display_name, title FROM servants WHERE organization_id = ? AND id = ?",
+    )
+    .bind(actor.organizationId, input.servantId)
+    .first<{ id: string; display_name: string; title: string | null }>();
+  if (servant?.title === "Staff") {
+    const role = await db
+      .prepare(
+        "SELECT id, code, name FROM service_roles WHERE organization_id = ? AND id = ?",
+      )
+      .bind(actor.organizationId, input.serviceRoleId)
+      .first<{ id: string; code: string; name: string }>();
+    if (role) {
+      const isAllowedForStaff =
+        role.code.startsWith("operator") ||
+        role.code.includes("sound") ||
+        role.code.includes("media") ||
+        role.code === "kantoria" ||
+        role.name.toLowerCase().includes("operator") ||
+        role.name.toLowerCase().includes("kantoria");
+      if (!isAllowedForStaff) {
+        throw new ApplicationError(
+          "VALIDATION_FAILED",
+          422,
+          "Staff hanya dapat ditugaskan untuk peran Operator dan Kantoria.",
+        );
+      }
+    }
+  }
+
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   try {

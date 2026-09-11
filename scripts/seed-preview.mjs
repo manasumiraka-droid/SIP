@@ -37,6 +37,7 @@ try {
   }
 
   // 2. Service Roles
+  // 2. Service Roles (8 Peran Standar SPI)
   const roles = [
     {
       id: "role-preacher",
@@ -46,46 +47,53 @@ try {
       slots: 1,
     },
     {
-      id: "role-mc",
+      id: "role-mimbar-2",
       fieldId: "field-word",
-      code: "mc",
-      name: "Pemimpin Pujian (MC)",
+      code: "mimbar_2",
+      name: "Pelayan Mimbar 2",
       slots: 1,
     },
     {
-      id: "role-singer",
-      fieldId: "field-music",
-      code: "singer",
-      name: "Penyanyi (Singer)",
+      id: "role-pintu-kolektan",
+      fieldId: "field-usher",
+      code: "pintu_kolektan",
+      name: "Kolektan dan Pelayan Pintu",
+      slots: 2,
+    },
+    {
+      id: "role-persembahan",
+      fieldId: "field-usher",
+      code: "persembahan",
+      name: "Pelayan Persembahan",
       slots: 2,
     },
     {
       id: "role-pianist",
       fieldId: "field-music",
       code: "pianist",
-      name: "Pemain Keyboard / Piano",
+      name: "Pemain Keyboard/Piano",
       slots: 1,
     },
     {
-      id: "role-operator",
+      id: "role-kantoria",
+      fieldId: "field-music",
+      code: "kantoria",
+      name: "Kantoria",
+      slots: 2,
+    },
+    {
+      id: "role-operator-media",
       fieldId: "field-media",
-      code: "operator",
+      code: "operator_multimedia",
       name: "Operator Multimedia",
       slots: 1,
     },
     {
-      id: "role-sound",
+      id: "role-operator-sound",
       fieldId: "field-media",
-      code: "sound",
+      code: "operator_sound",
       name: "Operator Sound System",
       slots: 1,
-    },
-    {
-      id: "role-usher",
-      fieldId: "field-usher",
-      code: "usher",
-      name: "Pelayan Pintu & Kolektan",
-      slots: 2,
     },
   ];
 
@@ -140,15 +148,22 @@ try {
       [u.id, orgId, u.email, u.name, now],
     );
 
+    // Grant user role
     await client.query(
       `INSERT INTO user_roles (id, organization_id, user_id, role_id, granted_by, granted_at, created_at, updated_at)
-       SELECT $1, $2, $3, $4, 'preview-admin', $5, $5, $5
-       WHERE NOT EXISTS (
-         SELECT 1 FROM user_roles WHERE organization_id = $2 AND user_id = $3 AND role_id = $4 AND revoked_at IS NULL
-       )`,
+       VALUES ($1, $2, $3, $4, 'preview-admin', $5, $5, $5)
+       ON CONFLICT (organization_id, user_id, role_id) WHERE revoked_at IS NULL DO NOTHING`,
       [randomUUID(), orgId, u.id, u.role, now],
     );
   }
+
+  // Also grant super_admin to preview admin user
+  await client.query(
+    `INSERT INTO user_roles (id, organization_id, user_id, role_id, granted_by, granted_at, created_at, updated_at)
+     VALUES ($1, $2, 'preview-admin', 'super_admin', 'preview-admin', $3, $3, $3)
+     ON CONFLICT (organization_id, user_id, role_id) WHERE revoked_at IS NULL DO NOTHING`,
+    [randomUUID(), orgId, now],
+  );
 
   // Coordinator Scopes
   await client.query(
@@ -160,25 +175,69 @@ try {
     [randomUUID(), orgId, now],
   );
 
-  // 4. Servants
+  // 4. Servants (Pelayan Jemaat dengan Jabatan: Diaken, Penatua, Staff)
   const servants = [
+    {
+      id: "servant-budi",
+      userId: "preview-coord-worship",
+      name: "Budi Santoso",
+      phone: "0812-1111-2222",
+      title: "Penatua",
+    },
+    {
+      id: "servant-siti",
+      userId: "preview-coord-media",
+      name: "Siti Rahma",
+      phone: "0813-3333-4444",
+      title: "Diaken",
+    },
+    {
+      id: "servant-dwi",
+      userId: "preview-servant-dwi",
+      name: "Dwi Hartono",
+      phone: "0812-9999-0000",
+      title: "Penatua",
+    },
+    {
+      id: "servant-rina",
+      userId: "preview-servant-rina",
+      name: "Rina Kurnia",
+      phone: "0813-7777-8888",
+      title: "Diaken",
+    },
+    {
+      id: "servant-maria",
+      userId: null,
+      name: "Maria Magdalena",
+      phone: "0812-4444-5555",
+      title: "Diaken",
+    },
     {
       id: "servant-johan",
       userId: "preview-servant-johan",
       name: "Johan Pratama",
+      phone: "0812-5555-6666",
+      title: "Staff",
     },
-    { id: "servant-rina", userId: "preview-servant-rina", name: "Rina Kurnia" },
-    { id: "servant-dwi", userId: "preview-servant-dwi", name: "Dwi Hartono" },
-    { id: "servant-maria", userId: null, name: "Maria Magdalena" },
-    { id: "servant-hendra", userId: null, name: "Hendra Wijaya" },
+    {
+      id: "servant-hendra",
+      userId: null,
+      name: "Hendra Wijaya",
+      phone: "0811-2222-3333",
+      title: "Penatua",
+    },
   ];
 
   for (const s of servants) {
     await client.query(
-      `INSERT INTO servants (id, organization_id, user_id, display_name, status, is_backup, version, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'active', 0, 1, $5, $5)
-       ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, updated_at = $5`,
-      [s.id, orgId, s.userId, s.name, now],
+      `INSERT INTO servants (id, organization_id, user_id, display_name, phone_number, title, status, is_backup, version, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'active', 0, 1, $7, $7)
+       ON CONFLICT (id) DO UPDATE SET
+         display_name = EXCLUDED.display_name,
+         phone_number = EXCLUDED.phone_number,
+         title = EXCLUDED.title,
+         updated_at = $7`,
+      [s.id, orgId, s.userId, s.name, s.phone, s.title, now],
     );
   }
 
@@ -192,25 +251,24 @@ try {
     );
   }
 
-  const capabilities = [
-    { servantId: "servant-johan", roleId: "role-operator" },
-    { servantId: "servant-johan", roleId: "role-sound" },
-    { servantId: "servant-rina", roleId: "role-usher" },
-    { servantId: "servant-rina", roleId: "role-singer" },
-    { servantId: "servant-dwi", roleId: "role-mc" },
-    { servantId: "servant-dwi", roleId: "role-pianist" },
-    { servantId: "servant-maria", roleId: "role-mc" },
-    { servantId: "servant-maria", roleId: "role-singer" },
-    { servantId: "servant-hendra", roleId: "role-preacher" },
-  ];
+  for (const s of servants) {
+    for (const r of roles) {
+      const isStaff = s.title === "Staff";
+      const isAllowedForStaff =
+        r.code.startsWith("operator") ||
+        r.code.includes("sound") ||
+        r.code.includes("media") ||
+        r.code === "kantoria";
 
-  for (const c of capabilities) {
-    await client.query(
-      `INSERT INTO servant_capabilities (id, organization_id, servant_id, service_role_id, status, approved_by, approved_at, version, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'active', 'preview-admin', $5, 1, $5, $5)
-       ON CONFLICT DO NOTHING`,
-      [randomUUID(), orgId, c.servantId, c.roleId, now],
-    );
+      if (!isStaff || isAllowedForStaff) {
+        await client.query(
+          `INSERT INTO servant_capabilities (id, organization_id, servant_id, service_role_id, status, approved_by, approved_at, version, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'active', 'preview-admin', $5, 1, $5, $5)
+           ON CONFLICT (organization_id, servant_id, service_role_id) DO NOTHING`,
+          [randomUUID(), orgId, s.id, r.id, now],
+        );
+      }
+    }
   }
 
   // 6. Worship Services
@@ -310,9 +368,9 @@ try {
       status: "accepted",
     },
     {
-      id: "assign-mc",
+      id: "assign-mimbar",
       serviceId: "ws-sunday-next",
-      roleId: "role-mc",
+      roleId: "role-mimbar-2",
       servantId: "servant-dwi",
       slot: 1,
       status: "unavailable",
@@ -320,7 +378,7 @@ try {
     {
       id: "assign-operator",
       serviceId: "ws-sunday-next",
-      roleId: "role-operator",
+      roleId: "role-operator-media",
       servantId: "servant-johan",
       slot: 1,
       status: "awaiting_confirmation",
@@ -328,15 +386,15 @@ try {
     {
       id: "assign-usher",
       serviceId: "ws-sunday-next",
-      roleId: "role-usher",
+      roleId: "role-pintu-kolektan",
       servantId: "servant-rina",
       slot: 1,
       status: "awaiting_confirmation",
     },
     {
-      id: "assign-singer",
+      id: "assign-kantoria",
       serviceId: "ws-sunday-next",
-      roleId: "role-singer",
+      roleId: "role-kantoria",
       servantId: "servant-maria",
       slot: 1,
       status: "accepted",
@@ -347,15 +405,15 @@ try {
     await client.query(
       `INSERT INTO assignments (id, organization_id, worship_service_id, service_role_id, servant_id, slot_number, status, version, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8, $8)
-       ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, updated_at = $8`,
+       ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, service_role_id = EXCLUDED.service_role_id, updated_at = $8`,
       [a.id, orgId, a.serviceId, a.roleId, a.servantId, a.slot, a.status, now],
     );
   }
 
-  // 8. Open Incident / Replacement Case for MC
+  // 8. Open Incident / Replacement Case for Pelayan Mimbar 2
   await client.query(
     `INSERT INTO replacement_cases (id, organization_id, service_id, assignment_id, service_role_id, status, urgency, reason, created_by, created_at, updated_at)
-     VALUES ('inc-mc-sunday', $1, 'ws-sunday-next', 'assign-mc', 'role-mc', 'open', 'critical', 'Dwi Hartono mendadak demam tinggi dan tidak dapat melayani.', 'preview-admin', $2, $2)
+     VALUES ('inc-mimbar-sunday', $1, 'ws-sunday-next', 'assign-mimbar', 'role-mimbar-2', 'open', 'critical', 'Dwi Hartono mendadak demam tinggi dan tidak dapat melayani.', 'preview-admin', $2, $2)
      ON CONFLICT (id) DO UPDATE SET status = 'open', updated_at = $2`,
     [orgId, now],
   );
@@ -369,21 +427,21 @@ try {
       status: "present",
     },
     {
-      id: "past-mc",
+      id: "past-mimbar",
       servantId: "servant-maria",
-      roleId: "role-mc",
+      roleId: "role-mimbar-2",
       status: "present",
     },
     {
       id: "past-operator",
       servantId: "servant-johan",
-      roleId: "role-operator",
+      roleId: "role-operator-media",
       status: "present",
     },
     {
       id: "past-usher",
       servantId: "servant-rina",
-      roleId: "role-usher",
+      roleId: "role-pintu-kolektan",
       status: "late",
     },
   ];

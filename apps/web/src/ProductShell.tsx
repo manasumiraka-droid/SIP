@@ -12,6 +12,7 @@ import {
   MoreHorizontal,
   Search,
   ShieldCheck,
+  Users,
 } from "lucide-react";
 import { AuditPanel } from "./AuditPanel";
 import { UserAccess } from "./UserAccess";
@@ -22,15 +23,7 @@ import { PerformanceReportsPanel } from "./PerformanceReportsPanel";
 import { AttendanceModal } from "./AttendanceModal";
 import { MyTasksPanel } from "./MyTasksPanel";
 import { ServiceDetailModal, type ServiceDetail } from "./ServiceDetailModal";
-
-const nav = [
-  [LayoutDashboard, "Beranda"],
-  [CalendarDays, "Kalender"],
-  [ClipboardCheck, "Tugas"],
-  [AlertTriangle, "Insiden"],
-  [BarChart3, "Laporan"],
-  [MoreHorizontal, "Lainnya"],
-] as const;
+import { PelayananPanel } from "./PelayananPanel";
 
 export const PREVIEW_PERSONAS = [
   {
@@ -259,9 +252,21 @@ export function ProductShell({
     month: "long",
     year: "numeric",
     timeZone: timezone,
-  })
-    .format(new Date())
-    .toUpperCase();
+  }).format(new Date());
+  const canAccessPelayanan =
+    roles.includes("super_admin") ||
+    roles.includes("admin") ||
+    canManageServants;
+
+  const currentNav = [
+    [LayoutDashboard, "Beranda"],
+    [CalendarDays, "Kalender"],
+    [ClipboardCheck, "Tugas"],
+    [AlertTriangle, "Insiden"],
+    [BarChart3, "Laporan"],
+    ...(canAccessPelayanan ? ([[Users, "Pelayanan"]] as const) : []),
+    [MoreHorizontal, "Lainnya"],
+  ] as const;
 
   return (
     <div className="app-shell">
@@ -271,7 +276,7 @@ export function ProductShell({
         </a>
         <p>SISTEM PELAYANAN IBADAH</p>
         <nav>
-          {nav.map(([Icon, label]) => (
+          {currentNav.map(([Icon, label]) => (
             <a
               className={section === label ? "active" : ""}
               href={`#${label.toLowerCase()}`}
@@ -694,6 +699,8 @@ export function ProductShell({
           />
         ) : section === "Laporan" ? (
           <PerformanceReportsPanel organizationId="" />
+        ) : section === "Pelayanan" && canAccessPelayanan ? (
+          <PelayananPanel canManage={canAccessPelayanan} />
         ) : section === "Lainnya" ? (
           <section className="section-preview">
             <p className="eyebrow">PENGELOLAAN</p>
@@ -755,7 +762,7 @@ export function ProductShell({
       </main>
 
       <nav className="mobile-nav" aria-label="Navigasi ponsel">
-        {nav.map(([Icon, label]) => (
+        {currentNav.map(([Icon, label]) => (
           <a
             className={section === label ? "active" : ""}
             href={`#${label.toLowerCase()}`}

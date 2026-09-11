@@ -55,9 +55,16 @@ export function ServiceDetailModal({
 
   // New assignment state
   const [showAddForm, setShowAddForm] = useState(false);
-  const [roles, setRoles] = useState<Array<{ id: string; name: string }>>([]);
+  const [roles, setRoles] = useState<
+    Array<{ id: string; code: string; name: string }>
+  >([]);
   const [servants, setServants] = useState<
-    Array<{ id: string; displayName: string }>
+    Array<{
+      id: string;
+      displayName: string;
+      title: string | null;
+      phoneNumber: string | null;
+    }>
   >([]);
   const [selectedRoleId, setSelectedRoleId] = useState("");
   const [selectedServantId, setSelectedServantId] = useState("");
@@ -98,7 +105,12 @@ export function ServiceDetailModal({
           .then(
             (r) =>
               r.json() as Promise<{
-                data: Array<{ id: string; displayName: string }>;
+                data: Array<{
+                  id: string;
+                  displayName: string;
+                  title: string | null;
+                  phoneNumber: string | null;
+                }>;
               }>,
           )
           .then((d) => setServants(d.data ?? []))
@@ -143,6 +155,23 @@ export function ServiceDetailModal({
   const handleAddAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRoleId || !selectedServantId) return;
+
+    const selectedRole = roles.find((r) => r.id === selectedRoleId);
+    const selectedServant = servants.find((s) => s.id === selectedServantId);
+
+    const isOperatorOrKantoria = selectedRole
+      ? selectedRole.code.startsWith("operator") ||
+        selectedRole.code.includes("sound") ||
+        selectedRole.code.includes("media") ||
+        selectedRole.code === "kantoria"
+      : false;
+
+    if (selectedServant?.title === "Staff" && !isOperatorOrKantoria) {
+      alert(
+        `Pelayan ${selectedServant.displayName} berjabatan Staff dan hanya dapat ditugaskan untuk peran Operator Multimedia, Operator Sound System, atau Kantoria.`,
+      );
+      return;
+    }
 
     setSubmittingAssignment(true);
     try {
@@ -327,49 +356,98 @@ export function ServiceDetailModal({
                 marginBottom: "12px",
               }}
             >
-              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                <select
-                  required
-                  value={selectedRoleId}
-                  onChange={(e) => setSelectedRoleId(e.target.value)}
-                  style={{
-                    flex: 1,
-                    minWidth: "160px",
-                    padding: "8px",
-                    borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "0.85rem",
-                  }}
-                >
-                  <option value="">Pilih Peran Pelayanan…</option>
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
+              {(() => {
+                const selectedRole = roles.find((r) => r.id === selectedRoleId);
+                const isOperatorOrKantoria = selectedRole
+                  ? selectedRole.code.startsWith("operator") ||
+                    selectedRole.code.includes("sound") ||
+                    selectedRole.code.includes("media") ||
+                    selectedRole.code === "kantoria"
+                  : false;
 
-                <select
-                  required
-                  value={selectedServantId}
-                  onChange={(e) => setSelectedServantId(e.target.value)}
-                  style={{
-                    flex: 1,
-                    minWidth: "160px",
-                    padding: "8px",
-                    borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "0.85rem",
-                  }}
-                >
-                  <option value="">Pilih Pelayan…</option>
-                  {servants.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.displayName}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                return (
+                  <>
+                    <div
+                      style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}
+                    >
+                      <select
+                        required
+                        value={selectedRoleId}
+                        onChange={(e) => setSelectedRoleId(e.target.value)}
+                        style={{
+                          flex: 1,
+                          minWidth: "160px",
+                          padding: "8px",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1",
+                          fontSize: "0.85rem",
+                          backgroundColor: "#ffffff",
+                        }}
+                      >
+                        <option value="">Pilih Peran Pelayanan…</option>
+                        {roles.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        required
+                        value={selectedServantId}
+                        onChange={(e) => setSelectedServantId(e.target.value)}
+                        style={{
+                          flex: 1,
+                          minWidth: "180px",
+                          padding: "8px",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1",
+                          fontSize: "0.85rem",
+                          backgroundColor: "#ffffff",
+                        }}
+                      >
+                        <option value="">Pilih Pelayan…</option>
+                        {servants.map((s) => {
+                          const isStaff = s.title === "Staff";
+                          const isDisabled = Boolean(
+                            selectedRoleId && isStaff && !isOperatorOrKantoria,
+                          );
+                          const titleBadge = s.title ? `[${s.title}] ` : "";
+                          const note = isDisabled
+                            ? " (Khusus Operator/Kantoria)"
+                            : "";
+
+                          return (
+                            <option
+                              key={s.id}
+                              value={s.id}
+                              disabled={isDisabled}
+                            >
+                              {titleBadge}
+                              {s.displayName}
+                              {note}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    {selectedRole && (
+                      <div
+                        style={{
+                          fontSize: "0.78rem",
+                          marginTop: "6px",
+                          color: isOperatorOrKantoria ? "#047857" : "#4338ca",
+                        }}
+                      >
+                        {isOperatorOrKantoria
+                          ? "✓ Peran ini terbuka untuk semua jabatan: Penatua, Diaken, dan Staff."
+                          : "ℹ️ Peran liturgi/firman/pintu/persembahan khusus untuk Penatua dan Diaken."}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               <div
                 style={{

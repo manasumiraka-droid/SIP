@@ -12,6 +12,8 @@ import {
   createServantSchema,
   createServiceRoleSchema,
   operationsQuerySchema,
+  updateServantSchema,
+  updateServiceRoleSchema,
 } from "../../../packages/validation/src/operations";
 import {
   createAvailability,
@@ -21,10 +23,14 @@ import {
   createField,
   createServant,
   createServiceRole,
+  deleteServant,
+  deleteServiceRole,
   listAvailability,
   listFields,
   listServants,
   listServiceRoles,
+  updateServant,
+  updateServiceRole,
 } from "./operations-repository";
 import { limitMutation, readMutation } from "./mutation-request";
 
@@ -141,6 +147,64 @@ export function operationsRoutes() {
       },
       201,
     );
+  });
+  routes.put("/servants/:id", boundedBody, async (c) => {
+    const actor = c.get("actor");
+    requirePermission(actor, "servant.create_update");
+    const servantId = c.req.param("id");
+    const { body, key } = await readMutation(c);
+    await limitMutation(c);
+    return c.json({
+      request_id: c.get("requestId"),
+      data: await updateServant(
+        c.env.DB,
+        actor,
+        servantId,
+        updateServantSchema.parse(body),
+        key,
+        c.get("requestId"),
+      ),
+    });
+  });
+  routes.delete("/servants/:id", async (c) => {
+    const actor = c.get("actor");
+    requirePermission(actor, "servant.create_update");
+    const servantId = c.req.param("id");
+    return c.json({
+      request_id: c.get("requestId"),
+      data: await deleteServant(c.env.DB, actor, servantId, c.get("requestId")),
+    });
+  });
+  routes.put("/service-roles/:id", boundedBody, async (c) => {
+    const actor = c.get("actor");
+    requirePermission(actor, "service.create_update");
+    const roleId = c.req.param("id");
+    const { body } = await readMutation(c);
+    await limitMutation(c);
+    return c.json({
+      request_id: c.get("requestId"),
+      data: await updateServiceRole(
+        c.env.DB,
+        actor,
+        roleId,
+        updateServiceRoleSchema.parse(body),
+        c.get("requestId"),
+      ),
+    });
+  });
+  routes.delete("/service-roles/:id", async (c) => {
+    const actor = c.get("actor");
+    requirePermission(actor, "service.create_update");
+    const roleId = c.req.param("id");
+    return c.json({
+      request_id: c.get("requestId"),
+      data: await deleteServiceRole(
+        c.env.DB,
+        actor,
+        roleId,
+        c.get("requestId"),
+      ),
+    });
   });
   routes.get("/availability-blocks", async (c) => {
     const actor = c.get("actor");
