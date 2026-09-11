@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   AlertTriangle,
+  BarChart3,
   Bell,
   CalendarDays,
   ChevronRight,
@@ -17,12 +18,15 @@ import { UserAccess } from "./UserAccess";
 import { ImportScheduleWizard } from "./ImportScheduleWizard";
 import { TelegramActivationPanel } from "./TelegramActivationPanel";
 import { IncidentPanel } from "./IncidentPanel";
+import { PerformanceReportsPanel } from "./PerformanceReportsPanel";
+import { AttendanceModal } from "./AttendanceModal";
 
 const nav = [
   [LayoutDashboard, "Beranda"],
   [CalendarDays, "Kalender"],
   [ClipboardCheck, "Tugas"],
   [AlertTriangle, "Insiden"],
+  [BarChart3, "Laporan"],
   [MoreHorizontal, "Lainnya"],
 ] as const;
 
@@ -55,6 +59,10 @@ export function ProductShell({
   const [section, setSection] = useState("Beranda");
   const [services, setServices] = useState<ServiceSummary[]>([]);
   const [scheduleRevision, setScheduleRevision] = useState(0);
+  const [attendanceTarget, setAttendanceTarget] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const [scheduleState, setScheduleState] = useState<
     "loading" | "ready" | "error"
   >("loading");
@@ -299,6 +307,7 @@ export function ProductShell({
             state={scheduleState}
             timezone={timezone}
             onCreated={() => setScheduleRevision((value) => value + 1)}
+            onOpenAttendance={(id, title) => setAttendanceTarget({ id, title })}
           />
         ) : section === "Insiden" ? (
           <IncidentPanel
@@ -306,6 +315,8 @@ export function ProductShell({
             canManageReplacements={canManageRoles || canManageServants}
             onIncidentUpdated={() => setScheduleRevision((value) => value + 1)}
           />
+        ) : section === "Laporan" ? (
+          <PerformanceReportsPanel organizationId="" />
         ) : section === "Lainnya" ? (
           <section className="section-preview">
             <p className="eyebrow">PENGELOLAAN</p>
@@ -332,6 +343,16 @@ export function ProductShell({
             cakupan pelayanan Anda.
           </span>
         </section>
+
+        {attendanceTarget && (
+          <AttendanceModal
+            serviceId={attendanceTarget.id}
+            serviceTitle={attendanceTarget.title}
+            isOpen={true}
+            onClose={() => setAttendanceTarget(null)}
+            onSuccess={() => setScheduleRevision((value) => value + 1)}
+          />
+        )}
       </main>
       <nav className="mobile-nav" aria-label="Navigasi ponsel">
         {nav.map(([Icon, label]) => (
@@ -355,11 +376,13 @@ function ScheduleSection({
   state,
   timezone,
   onCreated,
+  onOpenAttendance,
 }: {
   services: ServiceSummary[];
   state: "loading" | "ready" | "error";
   timezone: string;
   onCreated: () => void;
+  onOpenAttendance: (id: string, title: string) => void;
 }) {
   const formatter = new Intl.DateTimeFormat("id-ID", {
     dateStyle: "medium",
@@ -398,7 +421,35 @@ function ScheduleSection({
                   penugasan terkonfirmasi · {service.status}
                 </p>
               </div>
-              <ChevronRight size={19} />
+              <div
+                style={{
+                  marginLeft: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenAttendance(service.id, service.theme ?? "Ibadah");
+                  }}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    backgroundColor: "#f1f5f9",
+                    color: "#334155",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Presensi
+                </button>
+                <ChevronRight size={19} />
+              </div>
             </article>
           ))}
         </div>

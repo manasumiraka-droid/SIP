@@ -40,6 +40,10 @@ export const permissions = [
   "import.schedule",
   "incident.read_manage",
   "replacement.manage",
+  "attendance.record",
+  "notes.manage",
+  "reports.read",
+  "reports.export",
 ] as const;
 export type Permission = (typeof permissions)[number];
 const grants: Record<Role, readonly Permission[]> = {
@@ -59,6 +63,10 @@ const grants: Record<Role, readonly Permission[]> = {
     "import.schedule",
     "incident.read_manage",
     "replacement.manage",
+    "attendance.record",
+    "notes.manage",
+    "reports.read",
+    "reports.export",
   ],
   worship_coordinator: [
     "user.read",
@@ -72,6 +80,10 @@ const grants: Record<Role, readonly Permission[]> = {
     "servant.manage_capability",
     "incident.read_manage",
     "replacement.manage",
+    "attendance.record",
+    "notes.manage",
+    "reports.read",
+    "reports.export",
   ],
   field_coordinator: [
     "user.read",
@@ -82,6 +94,10 @@ const grants: Record<Role, readonly Permission[]> = {
     "servant.manage_capability",
     "incident.read_manage",
     "replacement.manage",
+    "attendance.record",
+    "notes.manage",
+    "reports.read",
+    "reports.export",
   ],
   servant: [
     "user.read",
@@ -91,6 +107,7 @@ const grants: Record<Role, readonly Permission[]> = {
     "servant.create_update",
     "incident.read_manage",
     "replacement.manage",
+    "reports.read",
   ],
 };
 export function effectivePermissions(actor: Actor): Permission[] {

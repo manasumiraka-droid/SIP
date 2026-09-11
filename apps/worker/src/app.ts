@@ -19,6 +19,7 @@ import { scheduleRoutes } from "./schedule-routes";
 import { assignmentRoutes } from "./assignment-routes";
 import { importRoutes } from "./import-routes";
 import { incidentRoutes } from "./incident-routes";
+import { performanceRoutes } from "./performance-routes";
 import { operationsRoutes } from "./operations-routes";
 import { telegramRoutes } from "./telegram-routes";
 type Dependencies = {
@@ -229,6 +230,7 @@ export function createApp(dependencies: Dependencies = defaults) {
   app.route("/api/v1/incidents", incidentRoutes());
   app.route("/api/v1", operationsRoutes());
   app.route("/api/v1", telegramRoutes());
+  app.route("/api/v1", performanceRoutes());
   app.notFound((c) =>
     c.json(
       {
