@@ -269,7 +269,7 @@ export async function createServiceNote(
   db: D1Database,
   actor: Actor,
   input: CreateServiceNote,
-  requestId: string,
+  requestId: string = crypto.randomUUID(),
 ): Promise<{ id: string }> {
   const noteId = crypto.randomUUID();
   const nowIso = new Date().toISOString();
