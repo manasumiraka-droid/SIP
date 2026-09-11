@@ -354,17 +354,52 @@ async function commandReply(env: TelegramEnv, chatId: string, command: string) {
   if (command === "/darurat") {
     const target = assignments.results[0];
     if (!target) return "Tidak ada tugas aktif yang dapat dilaporkan darurat.";
-    await env.DB.prepare(
-      "INSERT OR IGNORE INTO telegram_emergency_reports(id,organization_id,assignment_id,servant_id,created_at) VALUES(?,?,?,?,?)",
+    const assignDetail = await env.DB.prepare(
+      "SELECT a.worship_service_id, a.service_role_id, ws.starts_at FROM assignments a JOIN worship_services ws ON ws.organization_id=a.organization_id AND ws.id=a.worship_service_id WHERE a.organization_id=? AND a.id=?",
     )
-      .bind(
+      .bind(env.ORGANIZATION_ID, target.id)
+      .first<{
+        worship_service_id: string;
+        service_role_id: string;
+        starts_at: string;
+      }>();
+    const nowIso = new Date().toISOString();
+    const diffMs = assignDetail
+      ? Date.parse(assignDetail.starts_at) - Date.now()
+      : 999999999;
+    const urgency = diffMs <= 60 * 60 * 1000 ? "critical" : "standard";
+
+    const batchStatements = [
+      env.DB.prepare(
+        "INSERT OR IGNORE INTO telegram_emergency_reports(id,organization_id,assignment_id,servant_id,created_at) VALUES(?,?,?,?,?)",
+      ).bind(
         crypto.randomUUID(),
         env.ORGANIZATION_ID,
         target.id,
         servant.id,
-        new Date().toISOString(),
-      )
-      .run();
+        nowIso,
+      ),
+    ];
+    if (assignDetail) {
+      batchStatements.push(
+        env.DB.prepare(
+          "INSERT OR IGNORE INTO replacement_cases(id,organization_id,service_id,assignment_id,service_role_id,status,urgency,reason,created_by,created_at,updated_at) VALUES(?,?,?,?,?,'open',?,'Laporan darurat via Telegram',NULL,?,?)",
+        ).bind(
+          crypto.randomUUID(),
+          env.ORGANIZATION_ID,
+          assignDetail.worship_service_id,
+          target.id,
+          assignDetail.service_role_id,
+          urgency,
+          nowIso,
+          nowIso,
+        ),
+        env.DB.prepare(
+          "UPDATE assignments SET status='needs_replacement', updated_at=? WHERE organization_id=? AND id=? AND status IN ('awaiting_confirmation','accepted')",
+        ).bind(nowIso, env.ORGANIZATION_ID, target.id),
+      );
+    }
+    await env.DB.batch(batchStatements);
     return "Laporan darurat dicatat untuk tugas aktif Anda. Koordinator akan menindaklanjuti.";
   }
   if (!assignments.results.length)
@@ -377,6 +412,14 @@ async function commandReply(env: TelegramEnv, chatId: string, command: string) {
         `${escapeText(item.role_name)} — ${new Date(item.starts_at).toLocaleString("id-ID", { timeZone: "Asia/Makassar" })}, ${escapeText(item.location)}`,
     )
     .join("\n");
+}
+
+export async function handleTelegramCommand(
+  env: TelegramEnv,
+  chatId: string,
+  command: string,
+): Promise<string> {
+  return commandReply(env, chatId, command);
 }
 
 async function handleCallback(

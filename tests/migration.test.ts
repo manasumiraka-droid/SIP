@@ -29,6 +29,7 @@ it("enforces tenant foreign keys, role uniqueness and append-only audit", () => 
       "0021_telegram_activation_idempotency.sql",
       "0022_telegram_emergency_idempotency.sql",
       "0023_remote_trigger_compatibility.sql",
+      "0024_replacement_incidents.sql",
     ])
       db.exec(readFileSync(`migrations/${migration}`, "utf8"));
     db.exec(

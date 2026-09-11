@@ -38,6 +38,8 @@ export const permissions = [
   "servant.create_update",
   "servant.manage_capability",
   "import.schedule",
+  "incident.read_manage",
+  "replacement.manage",
 ] as const;
 export type Permission = (typeof permissions)[number];
 const grants: Record<Role, readonly Permission[]> = {
@@ -55,6 +57,8 @@ const grants: Record<Role, readonly Permission[]> = {
     "servant.create_update",
     "servant.manage_capability",
     "import.schedule",
+    "incident.read_manage",
+    "replacement.manage",
   ],
   worship_coordinator: [
     "user.read",
@@ -66,6 +70,8 @@ const grants: Record<Role, readonly Permission[]> = {
     "assignment.create_update",
     "servant.read",
     "servant.manage_capability",
+    "incident.read_manage",
+    "replacement.manage",
   ],
   field_coordinator: [
     "user.read",
@@ -74,6 +80,8 @@ const grants: Record<Role, readonly Permission[]> = {
     "assignment.create_update",
     "servant.read",
     "servant.manage_capability",
+    "incident.read_manage",
+    "replacement.manage",
   ],
   servant: [
     "user.read",
@@ -81,6 +89,8 @@ const grants: Record<Role, readonly Permission[]> = {
     "assignment.respond",
     "servant.read",
     "servant.create_update",
+    "incident.read_manage",
+    "replacement.manage",
   ],
 };
 export function effectivePermissions(actor: Actor): Permission[] {
@@ -117,6 +127,8 @@ export function canAccess(
           "assignment.respond",
           "servant.read",
           "servant.create_update",
+          "incident.read_manage",
+          "replacement.manage",
         ].includes(permission) && resource.ownerId === actor.id
       );
     return actor.scopes.some((scope) => {

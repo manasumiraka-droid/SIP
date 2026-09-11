@@ -16,6 +16,7 @@ import { AuditPanel } from "./AuditPanel";
 import { UserAccess } from "./UserAccess";
 import { ImportScheduleWizard } from "./ImportScheduleWizard";
 import { TelegramActivationPanel } from "./TelegramActivationPanel";
+import { IncidentPanel } from "./IncidentPanel";
 
 const nav = [
   [LayoutDashboard, "Beranda"],
@@ -215,7 +216,10 @@ export function ProductShell({
                   <strong>00:18:42</strong>
                   <small>tersisa</small>
                 </div>
-                <button className="critical-action">
+                <button
+                  className="critical-action"
+                  onClick={() => setSection("Insiden")}
+                >
                   Buka penggantian <ChevronRight size={17} />
                 </button>
               </section>
@@ -295,6 +299,12 @@ export function ProductShell({
             state={scheduleState}
             timezone={timezone}
             onCreated={() => setScheduleRevision((value) => value + 1)}
+          />
+        ) : section === "Insiden" ? (
+          <IncidentPanel
+            timezone={timezone}
+            canManageReplacements={canManageRoles || canManageServants}
+            onIncidentUpdated={() => setScheduleRevision((value) => value + 1)}
           />
         ) : section === "Lainnya" ? (
           <section className="section-preview">
