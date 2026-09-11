@@ -102,17 +102,32 @@ async function main() {
     fullPage: true,
   });
 
-  // 9. Switch Persona to Pelayan (Rina Kurnia)
-  console.log("Switching persona to Rina Kurnia...");
+  // 9. Switch back to Super Admin to capture Pelayanan menu
+  console.log("Switching persona back to Super Admin...");
   await page.selectOption(
     'select[aria-label="Ganti Persona Preview"]',
-    "rina.kurnia@spi-preview.invalid",
+    "manasumiraka@gmail.com",
   );
   await page.waitForTimeout(2000);
-  await page.click('nav a[href="#tugas"]');
-  await page.waitForTimeout(1000);
+
+  // 10. Pelayanan Menu (Data Pelayan tab)
+  console.log("Capturing 10. Pelayanan Menu (Data Pelayan)...");
+  await page.click('nav a[href="#pelayanan"]');
+  await page.waitForTimeout(1500);
   await page.screenshot({
-    path: path.join(targetDir, "preview_rina_tugas.png"),
+    path: path.join(targetDir, "preview_pelayanan_data.png"),
+    fullPage: true,
+  });
+
+  // 11. Pelayanan Menu (Jenis Peran tab)
+  console.log("Capturing 11. Pelayanan Menu (Jenis Peran)...");
+  const peranTabBtn = page.locator('button:has-text("Jenis Peran Pelayanan")');
+  if (await peranTabBtn.isVisible()) {
+    await peranTabBtn.click();
+    await page.waitForTimeout(1000);
+  }
+  await page.screenshot({
+    path: path.join(targetDir, "preview_pelayanan_peran.png"),
     fullPage: true,
   });
 
