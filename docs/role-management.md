@@ -20,6 +20,16 @@ Rate limit mutation adalah 20 permintaan per 60 detik per actor-organisasi mengg
 
 Log request hanya berisi request_id, nama operasi dari allowlist, status HTTP dan durasi. URL mentah, query, body, email, token dan catatan tidak dicatat. Audit database menyimpan actor, target, role sebelum/sesudah dan version; kegagalan login tetap tercermin sebagai status HTTP tanpa identitas tidak terverifikasi.
 
+## Menu Pengaturan & Antarmuka Manajemen Role (Super Admin)
+
+Menu **Pengaturan** terpadu kini tersedia di navigasi utama untuk role `super_admin`:
+
+1. **Pengguna & Role**: Antarmuka visual untuk melihat seluruh daftar akun pengguna, pencarian, filter status & role chips, modal **Atur Peran** multi-select many-to-many, modal **Ubah Status** (`active`, `inactive`, `suspended`), dan modal **Tambah Pengguna**.
+2. **Organisasi & Kebijakan**: Ringkasan zona waktu operasional gerejawi (`Asia/Makassar`) dan ketentuan retensi data sesuai PRD v1.2 Poin 11.
+3. **Integrasi Telegram**: Pengaturan dan aktivasi bot Telegram untuk pengingat jadwal otomatis.
+4. **Audit Log & Keamanan**: Jejak audit keamanan yang mencatat seluruh aksi otorisasi dan perubahan status akun.
+5. **Impor Jadwal Excel**: Wizard impor data spreadsheet jadwal pelayanan.
+
 ## Verifikasi dan batas
 
 Tes Miniflare memakai D1/workerd lokal dengan fixture sintetis dan kedua migrasi asli. Adapter konversi resmi Miniflare dipakai untuk format opsi pada versi yang sudah dibawa Wrangler; tidak menambahkan simulator produksi. Tes mencakup permission, tenant, CSRF, validasi, rate limit, replay, stale version, pencabutan aktor, concurrency dan rollback akibat kegagalan audit. Tes browser memakai respons API simulasi untuk memeriksa form mobile dan konflik; bukan pengujian Access nyata.
